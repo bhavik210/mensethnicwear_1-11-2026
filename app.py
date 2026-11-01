@@ -386,7 +386,7 @@ def header():
     st.markdown(
         f'<div class="brandbar">{logo_html}<div class="brandcopy"><div class="brandtitle">SHUBHVASTRA</div>'
         '<div class="brandsub">ORDER MANAGEMENT SYSTEM · 2026 EDITION</div></div>'
-        '<div class="brandmeta">SECURE BUSINESS PORTAL</div></div>',
+        '</div>',
         unsafe_allow_html=True
     )
 
@@ -513,7 +513,6 @@ def page_dashboard():
         val=one(sql)["n"]
         with col: st.markdown(f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{val}</div></div>",unsafe_allow_html=True)
     st.subheader("All Parties")
-    st.caption("Party list read-only છે. કોઈ field edit નહીં થાય; cell પસંદ કરીને Ctrl+C થી text copy કરી શકો છો.")
     search = st.text_input(
         "🔎 Search Party",
         placeholder="Party name, phone, city, GST, agent, transport અથવા reference લખો...",
@@ -764,7 +763,6 @@ def page_order_form(edit_id=None):
         info[2].text_input("State",str(party.state),disabled=True,key=f"ord_state_{edit_id or 'new'}")
         info[3].text_input("Agent",str(party.agent_name),disabled=True,key=f"ord_agent_{edit_id or 'new'}")
     st.subheader("Item Details")
-    st.caption("શરૂઆતમાં 5 rows દેખાશે. છેલ્લી row માં SKU અથવા quantity ભરશો એટલે આગળની row આપમેળે ઉમેરાશે (મહત્તમ 999).")
     sku_options=[""]+skus.sku_number.tolist()
     rows=[]
     header=st.columns([.5,3,1,1,1,1,1.2,1.3,1.2])
@@ -1202,6 +1200,30 @@ def page_dispatch(view='dispatch'):
         st.download_button('Download PDF',pending_report_pdf_bytes(labels[view],shown),file_name=filename,mime='application/pdf',key=f'{view}_pending_pdf',use_container_width=True)
 
 
+
+def _size_columns_report(df, group_cols, size_col='Size', qty_col='Dispatched Qty'):
+    """Aggregate size quantities into M/L/XL/XXL columns without losing report grouping."""
+    cols=list(group_cols)+['M','L','XL','XXL']
+    if df is None or df.empty:
+        return pd.DataFrame(columns=cols)
+    work=df.copy()
+    work[size_col]=work[size_col].astype(str).str.upper().str.strip()
+    work[qty_col]=pd.to_numeric(work[qty_col],errors='coerce').fillna(0)
+    out=[]
+    for key,g in work.groupby(list(group_cols),dropna=False,sort=False):
+        if not isinstance(key,tuple): key=(key,)
+        row=dict(zip(group_cols,key))
+        for sz in ('M','L','XL','XXL'):
+            row[sz]=int(g.loc[g[size_col]==sz,qty_col].sum())
+        # Keep uncommon sizes visible in a final Details field only if they occur.
+        other=g.loc[~g[size_col].isin(['M','L','XL','XXL'])]
+        if not other.empty:
+            row['Other Sizes']=', '.join(f"{r[size_col]}: {int(r[qty_col])}" for _,r in other.iterrows())
+        out.append(row)
+    result=pd.DataFrame(out)
+    if 'Other Sizes' in result.columns: cols.append('Other Sizes')
+    return result.reindex(columns=cols)
+
 def page_dispatched_details(view='party'):
     """Show saved dispatch transactions by party or agent, with PDF export."""
     title = 'Party Wise Dispatched History' if view == 'party' else 'Agent Wise Dispatched History'
@@ -1240,11 +1262,15 @@ def page_dispatched_details(view='party'):
         if chosen_party != 'All Parties':
             shown = shown[shown['Party Name'] == chosen_party].copy()
             filename = 'shubhvastra_agent_party_dispatched_history.pdf'
-    st.dataframe(shown, use_container_width=True, hide_index=True)
+    group_cols=['Party Name','Agent Name','Order No.','Order Date','Dispatch Date','SKU Code','Invoice No.','Dispatch Details']
+    report=_size_columns_report(shown,group_cols)
+    display_cols=group_cols+['M','L','XL','XXL']+(['Other Sizes'] if 'Other Sizes' in report.columns else [])
+    report=report.reindex(columns=display_cols)
+    st.dataframe(report, use_container_width=True, hide_index=True)
     st.caption(f"Dispatched pieces: {int(pd.to_numeric(shown['Dispatched Qty'], errors='coerce').fillna(0).sum())}")
     if shown.empty:
         st.info('પસંદ કરેલા filter માટે dispatched history મળી નથી.')
-    st.download_button('Download PDF', pending_report_pdf_bytes(title, shown), file_name=filename,
+    st.download_button('Download PDF', pending_report_pdf_bytes(title, report), file_name=filename,
                        mime='application/pdf', key=f'{view}_dispatched_history_pdf', use_container_width=True)
 
 
@@ -1259,8 +1285,21 @@ def page_reports():
     st.title("Order Reports")
     tabs=st.tabs(["Pending Order List","Agent Wise Order","SKU Wise State Sale Report"])
     with tabs[0]:
-        df=q("SELECT o.order_no AS \"Order No\",o.order_date AS \"Order Date\",p.party_name AS \"Party Name\",i.particulars AS Particulars,s.size_code AS Size,s.ordered_qty AS \"Ordered Qty\",s.cancelled AS Cancelled,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM orders o JOIN parties p ON p.id=o.party_id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id WHERE o.cancelled=0 ORDER BY o.order_no DESC")
-        if not df.empty: df["Pending Qty"]=(df["Ordered Qty"]-df["Dispatched"]).clip(lower=0)
+        df=q("SELECT o.order_no AS \"Order No\",o.order_date AS \"Order Date\",p.party_name AS \"Party Name\",i.particulars AS \"SKU Code\",s.size_code AS Size,s.ordered_qty AS \"Ordered Qty\",s.cancelled AS Cancelled,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM orders o JOIN parties p ON p.id=o.party_id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id WHERE o.cancelled=0 ORDER BY o.order_no DESC")
+        if not df.empty:
+            df["Pending Qty"]=(df["Ordered Qty"]-df["Dispatched"]).clip(lower=0)
+            df=df[df["Pending Qty"]>0].copy()
+            group_cols=["Order No","Order Date","Party Name","SKU Code"]
+            rows=[]
+            for key,g in df.groupby(group_cols,dropna=False,sort=False):
+                row=dict(zip(group_cols,key))
+                for sz in ("M","L","XL","XXL"):
+                    row[sz]=int(g.loc[g["Size"].astype(str).str.upper()==sz,"Pending Qty"].sum())
+                row["Qty"]=int(g["Pending Qty"].sum())
+                rows.append(row)
+            df=pd.DataFrame(rows,columns=group_cols+["M","L","XL","XXL","Qty"])
+        else:
+            df=pd.DataFrame(columns=["Order No","Order Date","Party Name","SKU Code","M","L","XL","XXL","Qty"])
         st.dataframe(df,use_container_width=True,hide_index=True); df_download(df,"shubhvastra_pending_order_list.csv","Export Pending Orders")
     with tabs[1]:
         agents=q("SELECT a.id,a.agent_name AS \"Agent Name\",COUNT(DISTINCT p.id) AS \"Party Count\",COUNT(DISTINCT o.id) AS \"Order Count\" FROM agents a LEFT JOIN parties p ON p.agent_id=a.id LEFT JOIN orders o ON o.party_id=p.id GROUP BY a.id,a.agent_name ORDER BY a.agent_name")
