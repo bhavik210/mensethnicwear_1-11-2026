@@ -406,7 +406,7 @@ def page_agent_portal(view="dashboard"):
         st.title(f"My Dashboard — {agent_name}")
         parties = q('''SELECT p.party_name AS "Party Name",p.phone_number AS "Phone Number",
             p.city AS City,p.state AS State,p.address AS Address,p.gst_number AS "GST Number",
-            p.transport_details AS "Transport Name",p.transport_gst_number AS "Transport ID"
+            p.transport_details AS \"Transport Name\",p.transport_gst_number AS \"Transport ID\"
             FROM parties p WHERE p.agent_id=:aid ORDER BY p.party_name''', {"aid": aid})
         summary = one("SELECT COUNT(*) AS parties FROM parties WHERE agent_id=:aid", {"aid": aid})
         pending = one('''SELECT COUNT(DISTINCT o.id) AS orders, COALESCE(SUM(CASE WHEN o.cancelled=0 AND s.cancelled=0 THEN CASE WHEN s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0)>0 THEN s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0) ELSE 0 END ELSE 0 END),0) AS qty
@@ -509,8 +509,8 @@ def page_dashboard():
             p.city AS "City",
             p.gst_number AS "GST Number",
             COALESCE(a.agent_name, '') AS "Agent Name",
-            p.transport_details AS "Transport Name",
-            p.transport_gst_number AS "Transport ID",
+            p.transport_details AS \"Transport Name\",
+            p.transport_gst_number AS \"Transport ID\",
             p.reference AS "Reference",
             p.address AS "Address"
         FROM parties p
@@ -595,7 +595,7 @@ def page_parties():
         with st.form("party_add"):
             c=st.columns(3); name=c[0].text_input("Party Name *"); phone=c[1].text_input("Phone Number *"); reference=c[2].selectbox("Reference",REFERENCES)
             c=st.columns(3); address=c[0].text_input("Address"); city=c[1].text_input("City *"); state=c[2].text_input("State *")
-            c=st.columns(3); gst=c[0].text_input("Party GST Number"); transport=c[1].text_input("Transport Details"); tgst=c[2].text_input("Transport GST Number")
+            c=st.columns(3); gst=c[0].text_input("Party GST Number"); transport=c[1].text_input("Transport Name"); tgst=c[2].text_input("Transport ID")
             aid=st.selectbox("Agent (optional)",[None]+agents.id.tolist(),format_func=lambda x:"— Select Agent —" if x is None else agents.loc[agents.id==x,"agent_name"].iloc[0])
             if st.form_submit_button("Save Party",type="primary"):
                 if not all([name.strip(),phone.strip(),city.strip(),state.strip()]): st.error("Party Name, Phone, City અને State જરૂરી છે.")
@@ -604,7 +604,7 @@ def page_parties():
                     run("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:t,:tg,:aid)",{"n":name.strip(),"p":phone.strip(),"a":address.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":reference,"t":transport.strip(),"tg":tgst.strip(),"aid":aid})
                     st.success("Party save થઈ."); st.rerun()
     search=st.text_input("Search Party Name / Phone / City")
-    df=q("SELECT p.id AS ID,p.party_name AS \"Party Name\",p.phone_number AS Phone,p.address AS Address,p.city AS City,p.state AS State,p.gst_number AS GST,p.reference AS Reference,COALESCE(a.agent_name,'') AS Agent,p.transport_details AS Transport FROM parties p LEFT JOIN agents a ON a.id=p.agent_id WHERE (:q='' OR LOWER(p.party_name) LIKE LOWER(:likeq) OR p.phone_number LIKE :likeq OR LOWER(p.city) LIKE LOWER(:likeq)) ORDER BY p.party_name LIMIT 1000",{"q":search,"likeq":f"%{search}%"})
+    df=q("SELECT p.id AS ID,p.party_name AS \"Party Name\",p.phone_number AS Phone,p.address AS Address,p.city AS City,p.state AS State,p.gst_number AS \"Party GST Number\",p.reference AS Reference,COALESCE(a.agent_name,'') AS Agent,p.transport_details AS \"Transport Name\",p.transport_gst_number AS \"Transport ID\" FROM parties p LEFT JOIN agents a ON a.id=p.agent_id WHERE (:q='' OR LOWER(p.party_name) LIKE LOWER(:likeq) OR p.phone_number LIKE :likeq OR LOWER(p.city) LIKE LOWER(:likeq)) ORDER BY p.party_name LIMIT 1000",{"q":search,"likeq":f"%{search}%"})
     st.dataframe(df,use_container_width=True,hide_index=True)
     if not df.empty:
         if is_admin():
@@ -614,20 +614,30 @@ def page_parties():
                 with st.form("party_edit"):
                     c=st.columns(3); n=c[0].text_input("Party Name",old["party_name"]); p=c[1].text_input("Phone",old["phone_number"]); ref=c[2].selectbox("Reference",REFERENCES,index=REFERENCES.index(old["reference"]) if old["reference"] in REFERENCES else 1)
                     c=st.columns(3); a=c[0].text_input("Address",old["address"]); city=c[1].text_input("City",old["city"]); state=c[2].text_input("State",old["state"])
-                    c=st.columns(3); gst=c[0].text_input("GST Number",old["gst_number"]); td=c[1].text_input("Transport",old["transport_details"]); tg=c[2].text_input("Transport GST",old["transport_gst_number"])
+                    c=st.columns(3); gst=c[0].text_input("Party GST Number",old["gst_number"]); td=c[1].text_input("Transport Name",old["transport_details"]); tg=c[2].text_input("Transport ID",old["transport_gst_number"])
                     aid_opts=[None]+agents.id.tolist(); cur=old["agent_id"] if old["agent_id"] in aid_opts else None
                     aid=st.selectbox("Agent",aid_opts,index=aid_opts.index(cur),format_func=lambda x:"— None —" if x is None else agents.loc[agents.id==x,"agent_name"].iloc[0])
                     if st.form_submit_button("Save Changes",type="primary"):
                         run("UPDATE parties SET party_name=:n,phone_number=:p,address=:a,city=:c,state=:s,gst_number=:g,reference=:r,transport_details=:td,transport_gst_number=:tg,agent_id=:aid WHERE id=:id",{"n":n.strip(),"p":p.strip(),"a":a.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":ref,"td":td.strip(),"tg":tg.strip(),"aid":aid,"id":int(pid)}); st.success("Party update થઈ."); st.rerun()
     if is_admin():
         df_download(df,"shubhvastra_parties.csv","Export Parties CSV")
-        st.subheader("Import Parties CSV")
-        uploaded=st.file_uploader("Party CSV upload કરો",type=["csv"],key="party_csv")
+        export_cols=["Party Name","Phone Number","Address","City","State","Party GST Number","Reference","Agent Name","Transport Name","Transport ID"]
+        template_df=pd.DataFrame(columns=export_cols)
+        template_buffer=io.BytesIO()
+        with pd.ExcelWriter(template_buffer,engine="openpyxl") as writer:
+            template_df.to_excel(writer,index=False,sheet_name="Parties")
+        st.download_button("Download Party Excel Template",data=template_buffer.getvalue(),file_name="Shubhvastra_Party_Import_Template.xlsx",mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.subheader("Import Parties Excel / CSV")
+        st.caption("Excel columns: Party Name, Phone Number, Address, City, State, Party GST Number, Reference, Agent Name, Transport Name, Transport ID")
+        uploaded=st.file_uploader("Party Excel અથવા CSV upload કરો",type=["csv","xlsx"],key="party_csv_excel")
     else:
         uploaded=None
-    if is_admin() and uploaded and st.button("Import Party CSV"):
+    if is_admin() and uploaded and st.button("Import Party Excel / CSV"):
         try:
-            rows=list(csv.DictReader(io.StringIO(uploaded.getvalue().decode("utf-8-sig"))))
+            if uploaded.name.lower().endswith(".xlsx"):
+                rows=pd.read_excel(io.BytesIO(uploaded.getvalue()),dtype=str).fillna("").to_dict(orient="records")
+            else:
+                rows=list(csv.DictReader(io.StringIO(uploaded.getvalue().decode("utf-8-sig"))))
             agmap={str(x.agent_name).lower():int(x.id) for x in agents.itertuples()}; count=0
             with engine.begin() as conn:
                 for idx,r in enumerate(rows,2):
@@ -635,9 +645,9 @@ def page_parties():
                     if not nm: continue
                     exists=conn.execute(text("SELECT id FROM parties WHERE LOWER(party_name)=LOWER(:n) AND phone_number=:p AND LOWER(city)=LOWER(:c) AND LOWER(state)=LOWER(:s)"),{"n":nm,"p":ph,"c":city,"s":state}).first()
                     if exists: continue
-                    conn.execute(text("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:td,:tg,:aid)"),{"n":nm,"p":ph,"a":r.get("Address", ""),"c":city,"s":state,"g":r.get("Party GST Number", ""),"r":r.get("Reference","DIRECT") or "DIRECT","td":r.get("Transport Details",""),"tg":r.get("Transport GST Number",""),"aid":agmap.get((r.get("Agent Name") or "").strip().lower())}); count+=1
+                    conn.execute(text("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:td,:tg,:aid)"),{"n":nm,"p":ph,"a":r.get("Address", ""),"c":city,"s":state,"g":r.get("Party GST Number", r.get("GST Number", "")),"r":r.get("Reference","DIRECT") or "DIRECT","td":r.get("Transport Name", r.get("Transport Details","")),"tg":r.get("Transport ID", r.get("Transport GST Number","")),"aid":agmap.get((r.get("Agent Name") or "").strip().lower())}); count+=1
             st.success(f"{count} Party import થઈ."); st.rerun()
-        except Exception as e: st.error(f"CSV import failed: {e}")
+        except Exception as e: st.error(f"Excel / CSV import failed: {e}")
 
 
 def page_sku():
