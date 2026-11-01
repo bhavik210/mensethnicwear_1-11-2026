@@ -1072,8 +1072,17 @@ def page_dispatch(view='dispatch'):
            ORDER BY o.order_no DESC,i.sr_no,s.size_code""",{'pid':int(pid)})
         df['Pending Qty']=(df['Order Qty'].astype(int)-df['dispatched'].astype(int)-df['cancelled_qty'].astype(int)).clip(lower=0)
         df=df[df['Pending Qty']>0]
-        header=st.columns([1.1,1,1.2,.55,.7,.8,.8,1.8,.7])
-        for col,label in zip(header,['Order No.','Order Date','SKU Code','Size','Dispatch','Order Qty','Pending Qty','Details','Cancel']):
+        # Compact, readable piece-wise dispatch preview. Each pending piece remains
+        # an independent selectable row; the PDF report layout is intentionally untouched.
+        st.markdown('''<style>
+        div[class*="st-key-dispatch_piece_row_"] {padding: 5px 10px !important; margin: 2px 0 !important; border: 1px solid #d9e2ec; border-radius: 8px; background: rgba(255,255,255,.72);}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"] {gap: .25rem !important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] {display:none;}
+        div[class*="st-key-dispatch_piece_row_"] input {min-height: 34px;}
+        </style>''', unsafe_allow_html=True)
+        row_widths=[1.0,1.0,1.15,.5,.65,.75,.55,1.55,.6]
+        header=st.columns(row_widths,vertical_alignment='center')
+        for col,label in zip(header,['Order No.','Order Date','SKU Code','Size','Dispatch','Order Qty','Qty','Details','Cancel']):
             col.markdown(f'**{label}**')
         selected=[]
         for _,r in df.iterrows():
@@ -1083,8 +1092,8 @@ def page_dispatch(view='dispatch'):
                 dispatch_key=f'piece_dispatch_{token}'; cancel_key=f'piece_cancel_{token}'
                 dispatch_checked=bool(st.session_state.get(dispatch_key,False))
                 cancel_checked=bool(st.session_state.get(cancel_key,False))
-                with st.container(border=True):
-                    c=st.columns([1.1,1,1.2,.55,.7,.8,.8,1.8,.7],vertical_alignment='center')
+                with st.container(key=f'dispatch_piece_row_{token}',border=False):
+                    c=st.columns(row_widths,vertical_alignment='center')
                     c[0].write(str(r['Order No.']))
                     c[1].write(pd.to_datetime(r['Order Date']).strftime('%d-%m-%Y'))
                     c[2].write(str(r['SKU Code']))
@@ -1093,13 +1102,14 @@ def page_dispatch(view='dispatch'):
                         dispatch_checked=c[4].checkbox('Dispatch',key=dispatch_key,label_visibility='collapsed')
                     else: c[4].write('—')
                     c[5].write(int(r['Order Qty']))
-                    c[6].write(1)
+                    c[6].write('1 pc')
                     details=c[7].text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}',label_visibility='collapsed')
                     if not dispatch_checked:
                         cancel_checked=c[8].checkbox('Cancel',key=cancel_key,label_visibility='collapsed')
                     else: c[8].write('—')
                     if dispatch_checked or cancel_checked:
                         selected.append((size_id,str(r['Size']),details,'dispatch' if dispatch_checked else 'cancel',token))
+                st.markdown('<div style="height:3px"></div>',unsafe_allow_html=True)
         if st.button('Save to Dispatched',type='primary',use_container_width=True,key='save_to_dispatched'):
             if not selected:
                 st.info('પહેલાં Dispatch અથવા Cancel checkbox પસંદ કરો.')
