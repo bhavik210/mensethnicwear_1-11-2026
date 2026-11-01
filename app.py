@@ -277,23 +277,21 @@ def order_pdf_bytes(order, items_df):
     small = ParagraphStyle("OrderInfoSmall", parent=styles["BodyText"], fontName="Helvetica", fontSize=8, leading=10, textColor=colors.HexColor("#222222"))
     title_style = ParagraphStyle("CompactOrderTitle", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=11, leading=13, alignment=TA_CENTER, spaceBefore=0, spaceAfter=5)
     label_style = ParagraphStyle("OrderInfoLabel", parent=small, fontName="Helvetica-Bold")
-    # Requested header: centered title above both company logos.
-    story = [Paragraph("ORDER FORM", title_style), Spacer(1, 2*mm)]
+    # Header arranged to match the supplied reference image: two logos on one row,
+    # TRISHIV on the left and SHUBHVASTRA on the right; contact details below.
+    story = []
     app_dir = BASE
     trishiv_logo = app_dir / "static" / "trishiv_logo.jpg"
     shubhvastra_logo = app_dir / "static" / "shubhvastra_logo.png"
-    # Exact customer-supplied logo placement for every Order Form PDF preview/download:
-    # LEFT: TRISHIV ENTERPRISE LLP (second supplied image)
-    # RIGHT: SHUBHVASTRA (first supplied image)
-    trishiv_left_image = PDFImage(str(trishiv_logo), width=42*mm, height=42*mm, kind="proportional") if trishiv_logo.exists() else Paragraph("<b>TRISHIV ENTERPRISE LLP</b>", small)
-    shubhvastra_right_image = PDFImage(str(shubhvastra_logo), width=55*mm, height=23*mm, kind="proportional") if shubhvastra_logo.exists() else Paragraph("<b>SHUBHVASTRA</b>", small)
-    brand_row = Table([[trishiv_left_image, shubhvastra_right_image]], colWidths=[95*mm, 95*mm], hAlign="LEFT")
+    trishiv_left_image = PDFImage(str(trishiv_logo), width=34*mm, height=24*mm, kind="proportional") if trishiv_logo.exists() else Paragraph("<b>TRISHIV ENTERPRISE LLP</b>", small)
+    shubhvastra_right_image = PDFImage(str(shubhvastra_logo), width=55*mm, height=19*mm, kind="proportional") if shubhvastra_logo.exists() else Paragraph("<b>SHUBHVASTRA</b>", small)
+    brand_row = Table([[trishiv_left_image, shubhvastra_right_image]], colWidths=[95*mm, 95*mm], rowHeights=[27*mm], hAlign="LEFT")
     brand_row.setStyle(TableStyle([
         ("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(0,0),"LEFT"),("ALIGN",(1,0),(1,0),"RIGHT"),
         ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
         ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0)]))
-    story.extend([brand_row, Spacer(1, 2*mm)])
-    company_style = ParagraphStyle("CompanyContact", parent=small, fontSize=8, leading=10, textColor=colors.HexColor("#333333"), spaceAfter=1)
+    story.extend([brand_row, Spacer(1, 3*mm)])
+    company_style = ParagraphStyle("CompanyContact", parent=small, fontSize=8, leading=10, textColor=colors.HexColor("#111111"), spaceAfter=1)
     story.extend([
         Paragraph("<b>Address:</b> 2005 New Sardar Traders Market (NSTM), Puna Kumbhariya Road, Surat 395010", company_style),
         Paragraph("<b>Phone Number:</b> 9537510757 (Bhavik), 9099444455 (Nimesh)", company_style),
