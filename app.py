@@ -596,17 +596,24 @@ def page_parties():
     st.title("Party Master")
     agents=q("SELECT id,agent_name FROM agents ORDER BY agent_name")
     with st.expander("＋ Add New Party", expanded=False):
-        with st.form("party_add"):
-            c=st.columns(3); name=c[0].text_input("Party Name *"); phone=c[1].text_input("Phone Number *"); reference=c[2].selectbox("Reference",REFERENCES)
-            c=st.columns(3); address=c[0].text_input("Address"); city=c[1].text_input("City *"); state=c[2].text_input("State *")
-            c=st.columns(3); gst=c[0].text_input("Party GST Number"); transport=c[1].text_input("Transport Name"); tgst=c[2].text_input("Transport ID")
-            aid=st.selectbox("Agent (optional)",[None]+agents.id.tolist(),format_func=lambda x:"— Select Agent —" if x is None else agents.loc[agents.id==x,"agent_name"].iloc[0])
-            if st.form_submit_button("Save Party",type="primary"):
-                if not all([name.strip(),phone.strip(),city.strip(),state.strip()]): st.error("Party Name, Phone, City અને State જરૂરી છે.")
-                elif one("SELECT id FROM parties WHERE LOWER(party_name)=LOWER(:n) AND phone_number=:p AND LOWER(city)=LOWER(:c) AND LOWER(state)=LOWER(:s)",{"n":name.strip(),"p":phone.strip(),"c":city.strip(),"s":state.strip()}): st.error("આ જ વિગતોવાળી Party પહેલેથી છે.")
-                else:
-                    run("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:t,:tg,:aid)",{"n":name.strip(),"p":phone.strip(),"a":address.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":reference,"t":transport.strip(),"tg":tgst.strip(),"aid":aid})
-                    st.success("Party save થઈ."); st.rerun()
+        # Keep Reference outside a form so the Agent Name field reacts immediately.
+        c=st.columns(3); name=c[0].text_input("Party Name *",key="party_add_name"); phone=c[1].text_input("Phone Number *",key="party_add_phone"); reference=c[2].selectbox("Reference *",REFERENCES,key="party_add_reference")
+        c=st.columns(3); address=c[0].text_input("Address",key="party_add_address"); city=c[1].text_input("City *",key="party_add_city"); state=c[2].text_input("State *",key="party_add_state")
+        c=st.columns(3); gst=c[0].text_input("Party GST Number",key="party_add_gst"); transport=c[1].text_input("Transport Name",key="party_add_transport"); tgst=c[2].text_input("Transport ID",key="party_add_transport_id")
+        aid=None
+        if reference == "AGENT":
+            st.caption("Reference Agent પસંદ કરેલ હોવાથી Agent Name ફરજિયાત છે.")
+            aid=st.selectbox("Agent Name *",agents.id.tolist(),index=None,placeholder="Select Agent",format_func=lambda x:agents.loc[agents.id==x,"agent_name"].iloc[0],key="party_add_agent") if not agents.empty else None
+        if st.button("Save Party",type="primary",key="party_add_save"):
+            if not all([name.strip(),phone.strip(),city.strip(),state.strip()]): st.error("Party Name, Phone, City અને State જરૂરી છે.")
+            elif reference == "AGENT" and aid is None: st.error("Reference Agent પસંદ કર્યું છે. Agent Name ફરજિયાત છે.")
+            elif one("SELECT id FROM parties WHERE LOWER(party_name)=LOWER(:n) AND phone_number=:p AND LOWER(city)=LOWER(:c) AND LOWER(state)=LOWER(:s)",{"n":name.strip(),"p":phone.strip(),"c":city.strip(),"s":state.strip()}): st.error("આ જ વિગતોવાળી Party પહેલેથી છે.")
+            else:
+                run("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:t,:tg,:aid)",{"n":name.strip(),"p":phone.strip(),"a":address.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":reference,"t":transport.strip(),"tg":tgst.strip(),"aid":aid})
+                st.success("Party save થઈ.")
+                for k in ["party_add_name","party_add_phone","party_add_address","party_add_city","party_add_state","party_add_gst","party_add_transport","party_add_transport_id","party_add_agent"]:
+                    st.session_state.pop(k,None)
+                st.rerun()
     search=st.text_input(
         "🔎 Search Party",
         placeholder="Party name, phone, city, state, GST, agent અથવા transport લખો...",
