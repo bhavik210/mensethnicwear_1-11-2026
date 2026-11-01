@@ -127,7 +127,7 @@ def init_db():
       f"CREATE TABLE IF NOT EXISTS order_item_sizes (id {identity}, order_item_id INTEGER NOT NULL REFERENCES order_items(id) ON DELETE CASCADE, size_code VARCHAR(10) NOT NULL, ordered_qty INTEGER NOT NULL CHECK(ordered_qty > 0), cancelled INTEGER NOT NULL DEFAULT 0, UNIQUE(order_item_id,size_code))",
       f"CREATE TABLE IF NOT EXISTS order_dispatches (id {identity}, order_size_id INTEGER NOT NULL REFERENCES order_item_sizes(id) ON DELETE RESTRICT, dispatched_size VARCHAR(10) NOT NULL, qty INTEGER NOT NULL CHECK(qty > 0), dispatch_date DATE NOT NULL, details TEXT NOT NULL DEFAULT '', invoice_number VARCHAR(150) NOT NULL DEFAULT '', created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
       f"CREATE TABLE IF NOT EXISTS order_size_cancellations (id {identity}, order_size_id INTEGER NOT NULL REFERENCES order_item_sizes(id) ON DELETE CASCADE, qty INTEGER NOT NULL CHECK(qty > 0), details TEXT NOT NULL DEFAULT '', cancelled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
-      f"CREATE TABLE IF NOT EXISTS sku_master (id {identity}, sku_number VARCHAR(250) NOT NULL UNIQUE, sale_rate NUMERIC(12,2) NOT NULL CHECK(sale_rate >= 0), created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+      f"CREATE TABLE IF NOT EXISTS sku_master (id {identity}, sku_number VARCHAR(250) NOT NULL UNIQUE, sku_under VARCHAR(250) NOT NULL DEFAULT '', sale_rate NUMERIC(12,2) NOT NULL CHECK(sale_rate >= 0), created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
       f"CREATE TABLE IF NOT EXISTS users (id {identity}, username VARCHAR(100) NOT NULL UNIQUE, password_hash TEXT NOT NULL, role VARCHAR(20) NOT NULL DEFAULT 'staff', active INTEGER NOT NULL DEFAULT 1, agent_id INTEGER NULL REFERENCES agents(id) ON DELETE RESTRICT, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)"
     ]
     with engine.begin() as conn:
@@ -140,6 +140,7 @@ def init_db():
             conn.execute(text("ALTER TABLE order_item_sizes ADD COLUMN IF NOT EXISTS cancelled INTEGER NOT NULL DEFAULT 0"))
             conn.execute(text("ALTER TABLE order_dispatches ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(150) NOT NULL DEFAULT ''"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS agent_id INTEGER NULL REFERENCES agents(id) ON DELETE RESTRICT"))
+            conn.execute(text("ALTER TABLE sku_master ADD COLUMN IF NOT EXISTS sku_under VARCHAR(250) NOT NULL DEFAULT ''"))
         else:
             cols = {r[1] for r in conn.execute(text("PRAGMA table_info(orders)")).fetchall()}
             if "gst_type" not in cols:
@@ -149,6 +150,9 @@ def init_db():
             user_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(users)")).fetchall()}
             if "agent_id" not in user_cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN agent_id INTEGER NULL REFERENCES agents(id) ON DELETE RESTRICT"))
+            sku_cols = {r[1] for r in conn.execute(text("PRAGMA table_info(sku_master)")).fetchall()}
+            if "sku_under" not in sku_cols:
+                conn.execute(text("ALTER TABLE sku_master ADD COLUMN sku_under VARCHAR(250) NOT NULL DEFAULT ''"))
         # User accounts are created through first-run setup / Admin Panel.
         # Backfill SKU master from historic order items without changing saved order rates.
         conn.execute(text("""INSERT INTO sku_master(sku_number,sale_rate)
@@ -358,7 +362,7 @@ def table(sql, params=None, key=None):
     return df
 
 def get_parties(): return q("SELECT p.id,p.party_name,p.phone_number,p.address,p.city,p.state,p.gst_number,p.reference,p.transport_details,p.transport_gst_number,p.agent_id,COALESCE(a.agent_name,'') agent_name FROM parties p LEFT JOIN agents a ON a.id=p.agent_id ORDER BY p.party_name")
-def get_skus(): return q("SELECT id,sku_number,sale_rate FROM sku_master ORDER BY sku_number")
+def get_skus(): return q("SELECT id,sku_number,sku_under,sale_rate FROM sku_master ORDER BY sku_number")
 def get_order_no(): return int(one("SELECT COALESCE(MAX(order_no),1100)+1 AS n FROM orders")["n"])
 def get_dispatch_total(size_id): return int(one("SELECT COALESCE(SUM(qty),0) AS n FROM order_dispatches WHERE order_size_id=:id", {"id":int(size_id)})["n"])
 
@@ -655,12 +659,18 @@ def page_sku():
     tabs=st.tabs(["Add New SKU","Edit SKU"])
     with tabs[0]:
         with st.form("sku_add",clear_on_submit=True):
-            c=st.columns(2); sku=c[0].text_input("SKU Number *"); rate=c[1].number_input("Sale Rate *",min_value=0.0,step=1.0,format="%.2f")
+            c=st.columns(3)
+            sku=c[0].text_input("SKU Name *",placeholder="Enter SKU name")
+            sku_under=c[1].text_input("SKU Under *",placeholder="Enter SKU category / group")
+            rate=c[2].number_input("Sale Rate *",min_value=0.0,step=1.0,format="%.2f")
             if st.form_submit_button("Save SKU",type="primary"):
-                if not sku.strip(): st.error("SKU Number જરૂરી છે.")
-                elif one("SELECT id FROM sku_master WHERE LOWER(sku_number)=LOWER(:s)",{"s":sku.strip()}): st.error("આ SKU પહેલેથી છે.")
-                else: run("INSERT INTO sku_master(sku_number,sale_rate) VALUES(:s,:r)",{"s":sku.strip(),"r":rate}); st.success("SKU save થયો."); st.rerun()
-        table("SELECT sku_number AS \"SKU Number\",sale_rate AS \"Sale Rate\" FROM sku_master ORDER BY sku_number")
+                if not sku.strip(): st.error("SKU Name જરૂરી છે.")
+                elif not sku_under.strip(): st.error("SKU Under જરૂરી છે.")
+                elif one("SELECT id FROM sku_master WHERE LOWER(sku_number)=LOWER(:s)",{"s":sku.strip()}): st.error("આ SKU Name પહેલેથી છે.")
+                else:
+                    run("INSERT INTO sku_master(sku_number,sku_under,sale_rate) VALUES(:s,:u,:r)",{"s":sku.strip(),"u":sku_under.strip(),"r":rate})
+                    st.success("SKU save થયો."); st.rerun()
+        table("SELECT sku_number AS \"SKU Name\",sku_under AS \"SKU Under\",sale_rate AS \"Sale Rate\" FROM sku_master ORDER BY sku_number")
     with tabs[1]:
         if not is_admin():
             st.info("SKU edit માત્ર Admin કરી શકે છે.")
@@ -671,13 +681,20 @@ def page_sku():
                 sid=st.selectbox("SKU List",df.id.tolist(),format_func=lambda x:df.loc[df.id==x,"sku_number"].iloc[0],key="sku_edit_id")
                 old=one("SELECT * FROM sku_master WHERE id=:id",{"id":int(sid)})
                 with st.form("sku_edit_form"):
-                    n=st.text_input("SKU Number",old["sku_number"]); r=st.number_input("Sale Rate",min_value=0.0,value=float(old["sale_rate"]),step=1.0,format="%.2f")
+                    c=st.columns(3)
+                    n=c[0].text_input("SKU Name *",old["sku_number"])
+                    u=c[1].text_input("SKU Under *",old.get("sku_under", ""))
+                    r=c[2].number_input("Sale Rate *",min_value=0.0,value=float(old["sale_rate"]),step=1.0,format="%.2f")
                     if st.form_submit_button("Save Changes",type="primary"):
-                        run("UPDATE sku_master SET sku_number=:s,sale_rate=:r,updated_at=CURRENT_TIMESTAMP WHERE id=:id",{"s":n.strip(),"r":r,"id":int(sid)}); st.success("SKU update થયો. જૂના orders ના rates બદલાતા નથી."); st.rerun()
-                st.dataframe(df[["sku_number","sale_rate"]].rename(columns={"sku_number":"SKU Number","sale_rate":"Sale Rate"}),use_container_width=True,hide_index=True)
+                        if not n.strip(): st.error("SKU Name જરૂરી છે.")
+                        elif not u.strip(): st.error("SKU Under જરૂરી છે.")
+                        else:
+                            run("UPDATE sku_master SET sku_number=:s,sku_under=:u,sale_rate=:r,updated_at=CURRENT_TIMESTAMP WHERE id=:id",{"s":n.strip(),"u":u.strip(),"r":r,"id":int(sid)})
+                            st.success("SKU update થયો. જૂના orders ના rates બદલાતા નથી."); st.rerun()
+                st.dataframe(df[["sku_number","sku_under","sale_rate"]].rename(columns={"sku_number":"SKU Name","sku_under":"SKU Under","sale_rate":"Sale Rate"}),use_container_width=True,hide_index=True)
         st.caption("SKU Master ના rate માત્ર નવા Order માટે default થાય છે. જૂના order_items.piece_rate અલગથી સાચવાય છે.")
         if is_admin():
-            df=get_skus(); df_download(df.rename(columns={"sku_number":"SKU Number","sale_rate":"Sale Rate"}),"shubhvastra_sku.csv","Export SKU CSV")
+            df=get_skus(); df_download(df.rename(columns={"sku_number":"SKU Name","sku_under":"SKU Under","sale_rate":"Sale Rate"}),"shubhvastra_sku.csv","Export SKU CSV")
 
 
 def page_order_form(edit_id=None):
