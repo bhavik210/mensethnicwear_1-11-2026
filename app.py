@@ -282,8 +282,9 @@ def order_pdf_bytes(order, items_df):
     app_dir = BASE
     trishiv_logo = app_dir / "static" / "trishiv_logo.jpg"
     shubhvastra_logo = app_dir / "static" / "shubhvastra_logo.png"
-    logo_left = PDFImage(str(trishiv_logo), width=47*mm, height=35*mm, kind="proportional") if trishiv_logo.exists() else Paragraph("<b>TRISHIV ENTERPRISE LLP</b>", small)
-    logo_right = PDFImage(str(shubhvastra_logo), width=49*mm, height=25*mm, kind="proportional") if shubhvastra_logo.exists() else Paragraph("<b>SHUBHVASTRA</b>", small)
+    # Customer supplied brand assets: Trishiv on the left, Shubhvastra on the right.
+    logo_left = PDFImage(str(trishiv_logo), width=42*mm, height=42*mm, kind="proportional") if trishiv_logo.exists() else Paragraph("<b>TRISHIV ENTERPRISE LLP</b>", small)
+    logo_right = PDFImage(str(shubhvastra_logo), width=55*mm, height=23*mm, kind="proportional") if shubhvastra_logo.exists() else Paragraph("<b>SHUBHVASTRA</b>", small)
     brand_row = Table([[logo_left, logo_right]], colWidths=[95*mm, 95*mm], hAlign="LEFT")
     brand_row.setStyle(TableStyle([
         ("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(0,0),"LEFT"),("ALIGN",(1,0),(1,0),"RIGHT"),
@@ -331,7 +332,8 @@ def order_pdf_bytes(order, items_df):
         ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
         ("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5),
     ]))
-    story.extend([first_table, Spacer(1,2*mm), second_table, Spacer(1,5*mm), Paragraph("ITEM DETAILS", styles["Heading2"])])
+    item_details_style = ParagraphStyle("ItemDetailsCentered", parent=styles["Heading2"], alignment=TA_CENTER, fontName="Helvetica-Bold", fontSize=12, leading=14, spaceBefore=0, spaceAfter=2)
+    story.extend([first_table, Spacer(1,2*mm), second_table, Spacer(1,5*mm), Paragraph("ITEM DETAILS", item_details_style)])
     data=[["Sr.","Particulars / SKU","M","L","XL","XXL","Discount","WSP Rate","Qty","Amount"]]
     total_qty=0; total_amount=0; grouped={}
     for r in items_df.to_dict("records"):
@@ -351,6 +353,14 @@ def order_pdf_bytes(order, items_df):
     if order.get("narration"): story.append(Paragraph(f"<b>Additional Order Details:</b> {str(order['narration'])}",small))
     doc.build(story)
     return buff.getvalue()
+
+def order_pdf_filename(order):
+    """Consistent PDF filename: order number_party name."""
+    import re
+    order_no = str(order.get("order_no") or "Order").strip()
+    party = str(order.get("party_name") or "Party").strip()
+    safe = lambda value: re.sub(r"[^A-Za-z0-9_-]+", "_", value).strip("_") or "NA"
+    return f"{safe(order_no)}_{safe(party)}.pdf"
 
 def money(v):
     try: return f"₹{float(v):,.2f}"
@@ -871,7 +881,7 @@ def page_order_form(edit_id=None):
             st.session_state.pop("edit_order_id",None)
             st.session_state.pop("confirm_clean_order_form",None)
             st.session_state["pending_page"]="New Order"
-        st.download_button("Yes — Download PDF & Open New Order",pdf_data,file_name=f"shubhvastra_order_{odf['order_no']}.pdf",mime="application/pdf",type="primary",on_click=finish_after_pdf_download,use_container_width=True)
+        st.download_button("Yes — Download PDF & Open New Order",pdf_data,file_name=order_pdf_filename(odf),mime="application/pdf",type="primary",on_click=finish_after_pdf_download,use_container_width=True)
         if st.button("No — Continue Without PDF",use_container_width=True):
             finish_after_pdf_download()
             st.rerun()
@@ -917,7 +927,7 @@ def page_orders():
             if pdfrow:
                 pdfrow["packaging"] = ", ".join(json.loads(pdfrow.get("packaging") or "[]")) if str(pdfrow.get("packaging") or "").startswith("[") else str(pdfrow.get("packaging") or "")
                 pdfitems=q('SELECT i.sr_no AS Sr,i.particulars AS Particulars,i.piece_rate AS "WSP Rate",i.discount AS Discount,s.size_code AS Size,s.ordered_qty AS Qty,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM order_items i JOIN order_item_sizes s ON s.order_item_id=i.id WHERE i.order_id=:id ORDER BY i.sr_no,s.size_code',{"id":oid})
-                cols[7].download_button("PDF",order_pdf_bytes(pdfrow,pdfitems),file_name=f"shubhvastra_order_{pdfrow['order_no']}.pdf",mime="application/pdf",key=f"history_pdf_{oid}",use_container_width=True)
+                cols[7].download_button("PDF",order_pdf_bytes(pdfrow,pdfitems),file_name=order_pdf_filename(pdfrow),mime="application/pdf",key=f"history_pdf_{oid}",use_container_width=True)
             if is_admin():
                 if cols[8].button("Delete",key=f"history_delete_{oid}",use_container_width=True):
                     st.session_state["confirm_delete_order_id"]=oid
@@ -952,7 +962,7 @@ def page_order_details():
     st.write("**Additional Order Details:**",o["narration"] or "—")
     df_download(df,f"order_{o['order_no']}_details.csv","Download Order Details CSV")
     pdf=order_pdf_bytes(o,df)
-    st.download_button("Download A4 Order PDF",pdf,file_name=f"shubhvastra_order_{o['order_no']}.pdf",mime="application/pdf",type="primary")
+    st.download_button("Download A4 Order PDF",pdf,file_name=order_pdf_filename(o),mime="application/pdf",type="primary")
 
 
 def pending_report_pdf_bytes(title, df):
