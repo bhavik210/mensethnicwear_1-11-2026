@@ -282,10 +282,12 @@ def order_pdf_bytes(order, items_df):
     app_dir = BASE
     trishiv_logo = app_dir / "static" / "trishiv_logo.jpg"
     shubhvastra_logo = app_dir / "static" / "shubhvastra_logo.png"
-    # Customer supplied brand assets: Trishiv on the left, Shubhvastra on the right.
-    logo_left = PDFImage(str(trishiv_logo), width=42*mm, height=42*mm, kind="proportional") if trishiv_logo.exists() else Paragraph("<b>TRISHIV ENTERPRISE LLP</b>", small)
-    logo_right = PDFImage(str(shubhvastra_logo), width=55*mm, height=23*mm, kind="proportional") if shubhvastra_logo.exists() else Paragraph("<b>SHUBHVASTRA</b>", small)
-    brand_row = Table([[logo_left, logo_right]], colWidths=[95*mm, 95*mm], hAlign="LEFT")
+    # Exact customer-supplied logo placement for every Order Form PDF preview/download:
+    # LEFT: TRISHIV ENTERPRISE LLP (second supplied image)
+    # RIGHT: SHUBHVASTRA (first supplied image)
+    trishiv_left_image = PDFImage(str(trishiv_logo), width=42*mm, height=42*mm, kind="proportional") if trishiv_logo.exists() else Paragraph("<b>TRISHIV ENTERPRISE LLP</b>", small)
+    shubhvastra_right_image = PDFImage(str(shubhvastra_logo), width=55*mm, height=23*mm, kind="proportional") if shubhvastra_logo.exists() else Paragraph("<b>SHUBHVASTRA</b>", small)
+    brand_row = Table([[trishiv_left_image, shubhvastra_right_image]], colWidths=[95*mm, 95*mm], hAlign="LEFT")
     brand_row.setStyle(TableStyle([
         ("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(0,0),(0,0),"LEFT"),("ALIGN",(1,0),(1,0),"RIGHT"),
         ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
