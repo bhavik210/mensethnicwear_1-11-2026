@@ -774,10 +774,16 @@ def page_order_form(edit_id=None):
         skey=f"ord_sku_{ix}"
         if skey not in st.session_state: st.session_state[skey]=str(old.particulars) if old is not None else ""
         cur=st.session_state[skey]
+        previous_sku_key=f"ord_last_sku_{ix}"
+        previous_sku=st.session_state.get(previous_sku_key, cur)
         opts=sku_options.copy()
         if cur and cur not in opts: opts.insert(1,cur)
         sku=c[1].selectbox("Particulars / SKU",opts,index=opts.index(cur) if cur in opts else 0,key=skey,label_visibility="collapsed")
         sku_rate=float(skus.loc[skus.sku_number==sku,"sale_rate"].iloc[0]) if not skus.empty and sku in skus.sku_number.tolist() else 0.0
+        visible_rate_key=f"ord_rate_visible_{ix}_{edit_id or 'new'}"
+        if sku != previous_sku:
+            st.session_state[visible_rate_key]=sku_rate
+        st.session_state[previous_sku_key]=sku
         rate_default=float(old.piece_rate) if old is not None else sku_rate
         rkey=f"ord_rate_{ix}"
         if edit_id:
@@ -786,7 +792,6 @@ def page_order_form(edit_id=None):
         else:
             rate=sku_rate
             st.session_state[rkey]=sku_rate
-        st.session_state[f"ord_last_sku_{ix}"]=sku
         sizes={}
         for j,size in enumerate(SIZES):
             qkey=f"ord_qty_{ix}_{size}"
@@ -795,7 +800,9 @@ def page_order_form(edit_id=None):
         disc_key=f"ord_disc_{ix}"
         if disc_key not in st.session_state: st.session_state[disc_key]=float(old.discount) if old is not None else 0.0
         disc=c[6].number_input("Discount",min_value=0.0,step=1.0,format="%.2f",key=disc_key,label_visibility="collapsed",disabled=bool(edit_id))
-        c[7].number_input("WSP Rate (₹)",min_value=0.0,value=float(rate),step=1.0,format="%.2f",key=f"ord_rate_visible_{ix}_{edit_id or 'new'}",disabled=True,label_visibility="collapsed")
+        if visible_rate_key not in st.session_state:
+            st.session_state[visible_rate_key]=float(rate)
+        c[7].number_input("WSP Rate (₹)",min_value=0.0,step=1.0,format="%.2f",key=visible_rate_key,disabled=True,label_visibility="collapsed")
         qty=sum(sizes.values())
         c[8].markdown(f"**{qty}**")
         rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
@@ -1075,8 +1082,11 @@ def page_dispatch(view='dispatch'):
         # Compact, readable piece-wise dispatch preview. Each pending piece remains
         # an independent selectable row; the PDF report layout is intentionally untouched.
         st.markdown('''<style>
-        div[class*="st-key-dispatch_piece_row_"] {padding: 5px 10px !important; margin: 2px 0 !important; border: 1px solid #d9e2ec; border-radius: 8px; background: rgba(255,255,255,.72);}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"] {gap: .25rem !important;}
+        div[class*="st-key-dispatch_piece_row_"] {padding: 2px 8px !important; margin: 0 0 2px 0 !important; border: 1px solid #d9e2ec; border-radius: 6px; background: rgba(255,255,255,.72);}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"] {gap: 0 !important; padding: 0 !important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stHorizontalBlock"] {gap: .35rem !important; align-items: center !important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stMarkdownContainer"] p {margin: 0 !important; padding: 0 !important; line-height: 1.15 !important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] {display:none;}
         div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] {display:none;}
         div[class*="st-key-dispatch_piece_row_"] input {min-height: 34px;}
         </style>''', unsafe_allow_html=True)
@@ -1102,7 +1112,7 @@ def page_dispatch(view='dispatch'):
                         dispatch_checked=c[4].checkbox('Dispatch',key=dispatch_key,label_visibility='collapsed')
                     else: c[4].write('—')
                     c[5].write(int(r['Order Qty']))
-                    c[6].write('1 pc')
+                    c[6].markdown('<span style="color:#172b4d;font-weight:600;font-size:14px;">1 Pcs</span>',unsafe_allow_html=True)
                     details=c[7].text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}',label_visibility='collapsed')
                     if not dispatch_checked:
                         cancel_checked=c[8].checkbox('Cancel',key=cancel_key,label_visibility='collapsed')
