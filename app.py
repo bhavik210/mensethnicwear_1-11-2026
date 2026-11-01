@@ -541,7 +541,7 @@ def page_dashboard():
         party_df = party_df.loc[mask].reset_index(drop=True)
     st.caption(f"કુલ {len(party_df)} પાર્ટી મળ્યા.")
     if str(current_user().get("role", "staff")).lower() == "staff":
-        party_df = party_df[[c for c in ["Party Name", "City", "Transport Name", "Transport ID", "Address"] if c in party_df.columns]]
+        party_df = party_df[[c for c in ["Party Name", "City"] if c in party_df.columns]]
     st.dataframe(
         party_df.fillna(""),
         use_container_width=True,
@@ -725,6 +725,8 @@ def page_sku():
 
 
 def page_order_form(edit_id=None):
+    if str(current_user().get("role", "staff")).lower() == "member":
+        edit_id = None
     st.title("New Order" if not edit_id else f"Edit Order #{edit_id}")
     parties=get_parties(); skus=get_skus()
     if parties.empty: st.warning("Order બનાવવા પહેલાં Party Master માં Party ઉમેરો."); return
@@ -935,7 +937,7 @@ def page_orders():
             cols[3].write(int(row["Qty"]))
             cols[4].write(f"₹{float(row['Amount'] or 0):,.2f}")
             cols[5].write(str(row["Agent Name"] or "—"))
-            if str(current_user().get("role", "staff")).lower() in ("admin", "member"):
+            if is_admin():
                 if cols[6].button("Edit",key=f"history_edit_{oid}",use_container_width=True):
                     st.session_state["edit_order_id"]=oid; st.session_state["pending_page"]="New Order"; st.rerun()
             else:
@@ -1061,6 +1063,9 @@ def page_dispatch(view='dispatch'):
     labels={'dispatch':'Pending to Dispatch Order','party':'Party Wise Pending Report',
             'agent':'Agent Wise Pending Report','sku':'SKU Wise Pending Report'}
     st.title(labels.get(view,'Pending to Dispatch Order'))
+    if view == 'dispatch' and str(current_user().get('role','staff')).lower() == 'staff':
+        st.error('Staff ને Pending to Dispatch Order કરવાની પરવાનગી નથી.')
+        return
     if view=='dispatch':
         parties=q("""SELECT DISTINCT p.id,p.party_name,p.city,COALESCE(a.agent_name,'') agent_name
           FROM parties p LEFT JOIN agents a ON a.id=p.agent_id JOIN orders o ON o.party_id=p.id
@@ -1584,7 +1589,8 @@ elif role_name == "member":
 elif role_name == "agent":
     menu=["My Dashboard","My Party Pending Orders","Total Dispatched Orders","Total Cancle Orders"]
 else:
-    menu=["Dashboard","Pending to Dispatched","Dispatched Details","Order Reports","Utilities"]
+    # Staff is read-only for reports; no order creation, dispatch actions, history or full reports.
+    menu=["Dashboard","Pending to Dispatched","Dispatched Details"]
 with st.sidebar:
     logo=BASE/"static"/"shubhvastra_logo.png"
     if logo.exists(): st.image(str(logo),width=125)
@@ -1605,7 +1611,10 @@ with st.sidebar:
         st.session_state["main_navigation"] = default
     page=st.radio("Navigation",menu,index=menu.index(default),key="main_navigation")
     if page == "Pending to Dispatched":
-        dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        if role_name == "staff":
+            dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        else:
+            dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
         dispatch_choice = st.selectbox("Pending to Dispatched", dispatch_options, key="pending_dispatch_submenu")
     else:
         dispatch_choice = ""
@@ -1632,8 +1641,13 @@ if role_name == "agent":
 elif page=="Dashboard": page_dashboard()
 elif page=="Party Master": page_parties()
 elif page=="New Order":
-    if str(user.get("role", "staff")).lower() == "staff": st.error("આ વિભાગ માટે પરવાનગી નથી.")
-    else: page_order_form(st.session_state.get("edit_order_id"))
+    if role_name not in ("admin", "member"):
+        st.error("આ વિભાગ માટે પરવાનગી નથી.")
+    elif role_name == "member":
+        st.session_state.pop("edit_order_id", None)
+        page_order_form(None)
+    else:
+        page_order_form(st.session_state.get("edit_order_id"))
 elif page=="Utilities" and util_choice == "Item Master" and role_name in ("admin", "member"): page_sku()
 elif page=="Utilities" and util_choice == "Agent Master" and role_name in ("admin", "member"): page_agents()
 elif page=="Utilities" and util_choice == "Order History / Order List": page_orders()
@@ -1642,7 +1656,9 @@ elif page=="Dispatched Details": page_dispatched_details("party" if dispatched_c
 elif page=="Utilities" and util_choice == "Admin Panel / Backup & Restore" and is_admin(): page_settings()
 elif page=="Pending to Dispatched":
     page_dispatch({"Pending to Dispatch Order":"dispatch", "Party Wise Pending Report":"party", "Agent Wise Pending Report":"agent", "SKU Wise Pending Report":"sku"}.get(dispatch_choice,"dispatch"))
-elif page=="Order Reports": page_reports()
+elif page=="Order Reports":
+    if role_name == "staff": st.error("Staff ને Order Reports access નથી.")
+    else: page_reports()
 
 
 st.markdown(f"<div style='text-align:center;color:#8b98a9;font-size:11px;padding:20px'>SHUBHVASTRA · Secure Login · {user['role'].title()}</div>",unsafe_allow_html=True)
