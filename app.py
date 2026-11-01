@@ -22,15 +22,22 @@ st.set_page_config(page_title="SHUBHVASTRA | Order Management", page_icon="🧵"
 CSS = """
 <style>
 :root{--navy:#132b4a;--blue:#1769aa;--blue2:#eaf3fb;--line:#dfe6ef;--muted:#64748b}
-.stApp{background:#f3f6fa;color:#1d2a3b}.block-container{padding-top:1rem;max-width:1500px}
+.stApp{background:#f3f6fa;color:#1d2a3b}.block-container{padding-top:1.35rem;max-width:1500px}
+/* Hide Streamlit's in-app toolbar, menu, GitHub/star/share controls and deploy button. */
+header[data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"]{display:none!important;visibility:hidden!important;height:0!important}
+[data-testid="stDecoration"]{display:none!important}
+/* Consistent professional page surface and spacing. */
+[data-testid="stMainBlockContainer"]{padding-bottom:2.5rem!important}
+[data-testid="stVerticalBlock"]>div:has(>.brandbar){margin-bottom:.8rem}
 [data-testid="stSidebar"]{background:#f8f6ef!important;color:#111827!important;border-right:1px solid #e5e0d5}
 [data-testid="stSidebar"] *{color:#111827!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label{padding:.5rem .6rem;border-radius:7px;color:#111827!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:#eae5d8!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label[data-checked="true"]{background:#e5dfd0!important;font-weight:700!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label p{color:#111827!important}
-.brandbar{background:#132b4a;color:white;border-radius:12px;padding:15px 20px;display:flex;align-items:center;gap:14px;margin-bottom:1rem}
-.brandtitle{font-weight:800;font-size:1.35rem;letter-spacing:.5px}.brandsub{color:#c5d5e8;font-size:.82rem}
+.brandbar{background:linear-gradient(115deg,#102844 0%,#174b70 58%,#1c6680 100%);color:#fff;border:1px solid #244d6c;border-radius:15px;padding:17px 22px;display:flex;align-items:center;gap:16px;margin:0 0 1.25rem;box-shadow:0 8px 24px rgba(16,40,68,.13);min-height:88px}
+.brandlogo{width:58px;height:58px;object-fit:contain;background:#fff;border-radius:11px;padding:5px;flex:0 0 auto}
+.brandcopy{display:flex;flex-direction:column;gap:4px;min-width:0}.brandtitle{font-weight:850;font-size:1.5rem;letter-spacing:1.1px;line-height:1.15;color:#fff!important}.brandsub{color:#d7e7f2;font-size:.78rem;letter-spacing:.65px;font-weight:600}.brandmeta{margin-left:auto;color:#e3edf5;font-size:.78rem;border:1px solid #6b91a9;border-radius:999px;padding:7px 12px;white-space:nowrap}
 .metric-card{background:white;border:1px solid #dfe6ef;border-radius:12px;padding:16px 18px;box-shadow:0 3px 12px #20344c07}
 .metric-label{font-size:.82rem;color:#64748b;font-weight:650}.metric-value{font-size:1.9rem;font-weight:800;color:#132b4a;margin-top:5px}
 .section-card{background:white;border:1px solid #dfe6ef;border-radius:12px;padding:16px 18px;margin-bottom:12px}
@@ -56,7 +63,7 @@ div.stButton>button[kind="primary"], [data-testid="stFormSubmitButton"] button[k
 div.stButton>button[kind="primary"] *, [data-testid="stFormSubmitButton"] button[kind="primary"] *{color:#fff!important}
 [data-testid="stDataFrame"] *{color:#1d2a3b}
 hr{border-color:#dbe4ef!important}
-@media(max-width:800px){.block-container{padding-left:.7rem;padding-right:.7rem}.brandtitle{font-size:1.05rem}}
+@media(max-width:800px){.block-container{padding-left:.7rem;padding-right:.7rem}.brandbar{padding:12px;gap:10px;min-height:72px}.brandlogo{width:44px;height:44px}.brandtitle{font-size:1.08rem}.brandsub{font-size:.65rem}.brandmeta{display:none}}
 
 </style>
 """
@@ -358,14 +365,13 @@ def get_dispatch_total(size_id): return int(one("SELECT COALESCE(SUM(qty),0) AS 
 
 def header():
     logo = BASE / "static" / "shubhvastra_logo.png"
-    cols = st.columns([1,7,2])
-    with cols[0]:
-        if logo.exists(): st.image(str(logo), width=72)
-    with cols[1]:
-        st.markdown('<div class="brandtitle">SHUBHVASTRA</div><div class="brandsub">NEW VERSION 2026 · ORDER MANAGEMENT SYSTEM</div>', unsafe_allow_html=True)
-    with cols[2]:
-        st.caption("Secure Login · Admin Controlled")
-    st.divider()
+    logo_html = f'<img class="brandlogo" src="data:image/png;base64,{__import__("base64").b64encode(logo.read_bytes()).decode()}" alt="Shubhvastra logo">' if logo.exists() else ''
+    st.markdown(
+        f'<div class="brandbar">{logo_html}<div class="brandcopy"><div class="brandtitle">SHUBHVASTRA</div>'
+        '<div class="brandsub">ORDER MANAGEMENT SYSTEM · 2026 EDITION</div></div>'
+        '<div class="brandmeta">SECURE BUSINESS PORTAL</div></div>',
+        unsafe_allow_html=True
+    )
 
 
 def login_screen():
