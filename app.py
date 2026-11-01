@@ -24,19 +24,18 @@ CSS = """
 :root{--navy:#132b4a;--blue:#1769aa;--blue2:#eaf3fb;--line:#dfe6ef;--muted:#64748b}
 .stApp{background:#f3f6fa;color:#1d2a3b}.block-container{padding-top:1.35rem;max-width:1500px}
 /* Hide Streamlit's in-app toolbar, menu, GitHub/star/share controls and deploy button. */
-header[data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"]{display:none!important;visibility:hidden!important;height:0!important}
+/* Keep Streamlit's native sidebar expand/collapse control available. Hide only app chrome, not the header container. */
+header[data-testid="stHeader"]{display:flex!important;visibility:visible!important;height:2.75rem!important;background:transparent!important}
+header[data-testid="stHeader"] [data-testid="stToolbar"], #MainMenu, [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"]{display:none!important;visibility:hidden!important}
+header[data-testid="stHeader"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
 [data-testid="stDecoration"]{display:none!important}
 /* Consistent professional page surface and spacing. */
 [data-testid="stMainBlockContainer"]{padding-bottom:2.5rem!important}
 [data-testid="stVerticalBlock"]>div:has(>.brandbar){margin-bottom:.8rem}
-/* Sidebar: collapsed rail stays reachable; desktop expands on hover, touch devices use the native toggle. */
-[data-testid="stSidebar"]{background:#f8f6ef!important;color:#111827!important;border-right:1px solid #e5e0d5;transition:width .22s ease,min-width .22s ease,transform .22s ease!important;z-index:1000!important}
+/* Sidebar uses Streamlit native expand/collapse controls for reliable recovery on desktop and touch devices. */
+[data-testid="stSidebar"]{background:#f8f6ef!important;color:#111827!important;border-right:1px solid #e5e0d5!important;z-index:1000!important}
 [data-testid="stSidebar"] *{color:#111827!important}
-[data-testid="stSidebar"][aria-expanded="false"]{width:3.25rem!important;min-width:3.25rem!important;transform:translateX(0)!important;visibility:visible!important;overflow:hidden!important}
-[data-testid="stSidebar"][aria-expanded="false"]:hover{width:21rem!important;min-width:21rem!important;overflow-y:auto!important;overflow-x:hidden!important;box-shadow:8px 0 24px rgba(15,35,55,.14)!important}
-[data-testid="stSidebar"][aria-expanded="false"]:not(:hover) [data-testid="stSidebarContent"]{opacity:0!important;pointer-events:none!important}
-[data-testid="stSidebar"][aria-expanded="false"]:hover [data-testid="stSidebarContent"]{opacity:1!important;pointer-events:auto!important;transition:opacity .15s ease .08s!important}
-[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"], [data-testid="stSidebar"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important;z-index:1002!important}
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"], [data-testid="stSidebar"] button[kind="header"], header[data-testid="stHeader"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;z-index:1002!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label{padding:.5rem .6rem;border-radius:7px;color:#111827!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:#eae5d8!important}
 [data-testid="stSidebar"] [data-testid="stRadio"] label[data-checked="true"]{background:#e5dfd0!important;font-weight:700!important}
@@ -74,10 +73,7 @@ div.stButton>button[kind="primary"] *, [data-testid="stFormSubmitButton"] button
 hr{border-color:#dbe4ef!important}
 @media(max-width:800px){
 .block-container{padding-left:.7rem;padding-right:.7rem}.brandbar{padding:12px;gap:10px;min-height:72px}.brandlogo{width:44px;height:44px}.brandtitle{font-size:1.08rem}.brandsub{font-size:.65rem}.brandmeta{display:none}
-/* Touch screens have no hover: preserve Streamlit's tap-to-open/tap-to-close behavior. */
-[data-testid="stSidebar"][aria-expanded="false"]{width:0!important;min-width:0!important;transform:translateX(-100%)!important;visibility:hidden!important}
-[data-testid="stSidebar"][aria-expanded="true"]{width:min(86vw,21rem)!important;min-width:min(86vw,21rem)!important;transform:translateX(0)!important;visibility:visible!important}
-[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"], [data-testid="stSidebar"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important}
+/* Mobile: leave the native Streamlit sidebar toggle and drawer behavior untouched. */
 }
 
 </style>
