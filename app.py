@@ -57,6 +57,9 @@ h1,h2,h3{color:#132b4a!important}div.stButton>button[kind="primary"]{background:
 .stApp, [data-testid="stMarkdownContainer"], [data-testid="stText"], label, p, li{color:#1d2a3b}
 [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label{color:#243b53!important;font-weight:600!important}
 input, textarea, [data-baseweb="select"]>div{color:#172b43!important;background:#fff!important;border-color:#cbd5e1!important}
+/* Keep disabled/read-only text readable on white fields (Order Number and WSP Rate). */
+input:disabled, textarea:disabled, [data-testid="stTextInput"] input:disabled{color:#172b43!important;-webkit-text-fill-color:#172b43!important;opacity:1!important;background:#f8fafc!important}
+/* Discount and WSP Rate use text fields, so no numeric +/- steppers are rendered. */
 [data-testid="stDownloadButton"] button, div.stButton>button, [data-testid="stFormSubmitButton"] button{background:#fff!important;color:#17406b!important;border:1px solid #b8c8da!important;border-radius:8px!important;font-weight:600!important;min-height:2.45rem;transition:all .15s ease}
 div.stButton>button:hover, [data-testid="stDownloadButton"] button:hover, [data-testid="stFormSubmitButton"] button:hover{background:#eaf3fb!important;border-color:#1769aa!important;color:#103d69!important}
 div.stButton>button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"], [data-testid="stDownloadButton"] button[kind="primary"]{background:#1769aa!important;color:#fff!important;border-color:#1769aa!important}
@@ -798,11 +801,20 @@ def page_order_form(edit_id=None):
             if qkey not in st.session_state: st.session_state[qkey]=0
             sizes[size]=c[2+j].number_input(size,min_value=0,step=1,key=qkey,label_visibility="collapsed")
         disc_key=f"ord_disc_{ix}"
-        if disc_key not in st.session_state: st.session_state[disc_key]=float(old.discount) if old is not None else 0.0
-        disc=c[6].number_input("Discount",min_value=0.0,step=1.0,format="%.2f",key=disc_key,label_visibility="collapsed",disabled=bool(edit_id))
+        if disc_key not in st.session_state: st.session_state[disc_key]=f"{float(old.discount) if old is not None else 0.0:.2f}"
+        else: st.session_state[disc_key]=str(st.session_state[disc_key])
+        disc_text=c[6].text_input("Discount",key=disc_key,label_visibility="collapsed",disabled=bool(edit_id),placeholder="0.00")
+        try:
+            disc=float(str(disc_text or "0").replace(",", "").strip() or 0)
+            if disc < 0: raise ValueError
+        except ValueError:
+            st.error(f"Row {ix+1}: Discount માં માન્ય શૂન્ય અથવા positive rate લખો.")
+            disc=0.0
         if visible_rate_key not in st.session_state:
-            st.session_state[visible_rate_key]=float(rate)
-        c[7].number_input("WSP Rate (₹)",min_value=0.0,step=1.0,format="%.2f",key=visible_rate_key,disabled=True,label_visibility="collapsed")
+            st.session_state[visible_rate_key]=f"{float(rate):.2f}"
+        else:
+            st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
+        c[7].text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True,label_visibility="collapsed")
         qty=sum(sizes.values())
         c[8].markdown(f"**{qty}**")
         rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
