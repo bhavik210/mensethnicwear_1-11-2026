@@ -3,7 +3,6 @@ from datetime import date, datetime
 from pathlib import Path
 import pandas as pd
 import streamlit as st
-from streamlit_keyup import st_keyup
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.engine import Engine
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -502,11 +501,10 @@ def page_dashboard():
         with col: st.markdown(f"<div class='metric-card'><div class='metric-label'>{label}</div><div class='metric-value'>{val}</div></div>",unsafe_allow_html=True)
     st.subheader("All Parties")
     st.caption("Party list read-only છે. કોઈ field edit નહીં થાય; cell પસંદ કરીને Ctrl+C થી text copy કરી શકો છો.")
-    search = st_keyup(
+    search = st.text_input(
         "🔎 Search Party",
         placeholder="Party name, phone, city, GST, agent, transport અથવા reference લખો...",
         key="dashboard_party_search",
-        debounce=300,
     )
     party_df = q("""
         SELECT
@@ -609,11 +607,10 @@ def page_parties():
                 else:
                     run("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:t,:tg,:aid)",{"n":name.strip(),"p":phone.strip(),"a":address.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":reference,"t":transport.strip(),"tg":tgst.strip(),"aid":aid})
                     st.success("Party save થઈ."); st.rerun()
-    search=st_keyup(
+    search=st.text_input(
         "🔎 Search Party",
         placeholder="Party name, phone, city, state, GST, agent અથવા transport લખો...",
         key="party_master_search_live",
-        debounce=300,
     )
     df=q("SELECT p.id AS ID,p.party_name AS \"Party Name\",p.phone_number AS Phone,p.address AS Address,p.city AS City,p.state AS State,p.gst_number AS \"Party GST Number\",p.reference AS Reference,COALESCE(a.agent_name,'') AS Agent,p.transport_details AS \"Transport Name\",p.transport_gst_number AS \"Transport ID\" FROM parties p LEFT JOIN agents a ON a.id=p.agent_id ORDER BY p.party_name LIMIT 1000")
     if search.strip() and not df.empty:
