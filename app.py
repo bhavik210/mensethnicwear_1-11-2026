@@ -544,23 +544,42 @@ def page_dashboard():
 
 def page_agents():
     st.title("Agent Master")
+    # Incrementing the widget-key version after a successful save clears both inputs
+    # without mutating Streamlit widget state after instantiation.
+    form_version = int(st.session_state.get("agent_add_form_version", 0))
     with st.expander("＋ Add New Agent", expanded=False):
-        with st.form("agent_add"):
-            a,b=st.columns(2); name=a.text_input("Agent Name *"); phone=b.text_input("Phone Number *")
+        with st.form(f"agent_add_{form_version}"):
+            a,b=st.columns(2)
+            name=a.text_input("Agent Name *", key=f"agent_add_name_{form_version}")
+            phone=b.text_input("Phone Number *", key=f"agent_add_phone_{form_version}")
             if st.form_submit_button("Save Agent",type="primary"):
-                if not name.strip() or not phone.strip(): st.error("Agent Name અને Phone જરૂરી છે.")
-                elif one("SELECT id FROM agents WHERE LOWER(agent_name)=LOWER(:n)",{"n":name.strip()}): st.error("આ Agent Name પહેલેથી છે.")
-                else: run("INSERT INTO agents(agent_name,phone_number) VALUES(:n,:p)",{"n":name.strip(),"p":phone.strip()}); st.success("Agent save થયો."); st.rerun()
-    df=table("SELECT id AS ID,agent_name AS \"Agent Name\",phone_number AS \"Phone Number\" FROM agents ORDER BY agent_name")
+                if not name.strip() or not phone.strip():
+                    st.error("Agent Name અને Phone જરૂરી છે.")
+                elif one("SELECT id FROM agents WHERE LOWER(agent_name)=LOWER(:n)",{"n":name.strip()}):
+                    st.error("આ Agent Name પહેલેથી છે.")
+                else:
+                    run("INSERT INTO agents(agent_name,phone_number) VALUES(:n,:p)",{"n":name.strip(),"p":phone.strip()})
+                    st.session_state["agent_add_form_version"] = form_version + 1
+                    st.success("Agent save થયો. હવે આગળનો Agent દાખલ કરી શકો છો.")
+                    st.rerun()
+    # Internal ID is retained in the database but intentionally hidden from this list.
+    df=table('SELECT agent_name AS "Agent Name",phone_number AS "Phone Number" FROM agents ORDER BY agent_name')
     if not df.empty:
+        st.dataframe(df, use_container_width=True, hide_index=True)
         if is_admin():
             with st.expander("Edit Agent"):
-                aid=st.selectbox("Select Agent",df.ID.tolist(),format_func=lambda x: df.loc[df.ID==x,"Agent Name"].iloc[0],key="agent_edit_id")
+                agent_rows=q("SELECT id,agent_name,phone_number FROM agents ORDER BY agent_name")
+                aid=st.selectbox("Select Agent",agent_rows.id.tolist(),format_func=lambda x: agent_rows.loc[agent_rows.id==x,"agent_name"].iloc[0],key="agent_edit_id")
                 old=one("SELECT * FROM agents WHERE id=:id",{"id":int(aid)})
                 with st.form("agent_edit"):
                     n=st.text_input("Agent Name",old["agent_name"]); p=st.text_input("Phone Number",old["phone_number"])
                     if st.form_submit_button("Save Changes",type="primary"):
-                        run("UPDATE agents SET agent_name=:n,phone_number=:p WHERE id=:id",{"n":n.strip(),"p":p.strip(),"id":int(aid)}); st.success("Agent update થયો."); st.rerun()
+                        if not n.strip() or not p.strip():
+                            st.error("Agent Name અને Phone જરૂરી છે.")
+                        else:
+                            run("UPDATE agents SET agent_name=:n,phone_number=:p WHERE id=:id",{"n":n.strip(),"p":p.strip(),"id":int(aid)})
+                            st.success("Agent update થયો.")
+                            st.rerun()
 
 
 def page_parties():
@@ -1430,9 +1449,9 @@ if not require_login():
 user=current_user()
 role_name = str(user.get("role", "staff")).lower()
 if role_name == "admin":
-    menu=["Dashboard","Party Master","Agent Master","New Order","Pending to Dispatched","Dispatched Details","Order Reports","Utilities"]
+    menu=["Dashboard","Party Master","New Order","Pending to Dispatched","Dispatched Details","Order Reports","Utilities"]
 elif role_name == "member":
-    menu=["Dashboard","Party Master","Agent Master","New Order","Pending to Dispatched","Dispatched Details","Order Reports","Utilities"]
+    menu=["Dashboard","Party Master","New Order","Pending to Dispatched","Dispatched Details","Order Reports","Utilities"]
 elif role_name == "agent":
     menu=["My Dashboard","My Party Pending Orders","Total Dispatched Orders","Total Cancle Orders"]
 else:
@@ -1464,6 +1483,7 @@ with st.sidebar:
     if page == "Utilities":
         util_options = ["Order History / Order List", "Cancelled Orders"]
         if role_name in ("admin", "member"):
+            util_options.insert(0, "Agent Master")
             util_options.insert(0, "Item Master")
         if is_admin():
             util_options.append("Admin Panel / Backup & Restore")
@@ -1482,11 +1502,11 @@ if role_name == "agent":
     elif page == "Total Cancle Orders": page_agent_portal("cancelled")
 elif page=="Dashboard": page_dashboard()
 elif page=="Party Master": page_parties()
-elif page=="Agent Master": page_agents()
 elif page=="New Order":
     if str(user.get("role", "staff")).lower() == "staff": st.error("આ વિભાગ માટે પરવાનગી નથી.")
     else: page_order_form(st.session_state.get("edit_order_id"))
 elif page=="Utilities" and util_choice == "Item Master" and role_name in ("admin", "member"): page_sku()
+elif page=="Utilities" and util_choice == "Agent Master" and role_name in ("admin", "member"): page_agents()
 elif page=="Utilities" and util_choice == "Order History / Order List": page_orders()
 elif page=="Utilities" and util_choice == "Cancelled Orders": page_cancelled_orders()
 elif page=="Dispatched Details": page_dispatched_details("party" if dispatched_choice == "Party Wise Dispatched History" else "agent")
