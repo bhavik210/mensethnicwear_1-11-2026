@@ -101,8 +101,16 @@ hr{border-color:#dbe4ef!important}
  }
  [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg,
  [data-testid="stSidebar"] button[kind="header"] svg{display:block!important;visibility:visible!important;opacity:1!important;fill:#fff!important;color:#fff!important;width:1.35rem!important;height:1.35rem!important}
- [data-testid="stSidebar"]{z-index:2147482000!important}
+ [data-testid="stSidebar"]{display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;max-width:0!important;transform:translateX(-110%)!important}
+ /* Mobile navigation is rendered in the main page directly under the brand header. */
+ .st-key-mobile_navigation{display:block!important;background:#f8f6ef;border:1px solid #d9e2ec;border-radius:12px;padding:8px 10px;margin:0 0 16px 0;box-shadow:0 3px 10px rgba(19,43,74,.08);position:relative;z-index:20}
+ .st-key-mobile_navigation [data-testid="stRadio"]>div{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;gap:6px!important}
+ .st-key-mobile_navigation [data-testid="stRadio"] label{background:#fff!important;border:1px solid #cbd5e1!important;border-radius:8px!important;padding:7px 10px!important;margin:0!important;min-height:36px!important}
+ .st-key-mobile_navigation [data-testid="stRadio"] label[data-checked="true"]{background:#173b5c!important;border-color:#173b5c!important}
+ .st-key-mobile_navigation [data-testid="stRadio"] label[data-checked="true"] *{color:#fff!important}
+ .st-key-mobile_navigation [data-testid="stRadio"] label p{font-size:13px!important;font-weight:650!important;margin:0!important}
 }
+@media(min-width:801px){.st-key-mobile_navigation{display:none!important}}
 
 </style>
 """
@@ -1668,7 +1676,62 @@ with st.sidebar:
     else:
         util_choice = ""
         dispatched_choice = ""
-    st.session_state["page"]=page
+
+# On phones, replace the sidebar with a horizontal navigation row immediately
+# below the SHUBHVASTRA brand header. The desktop sidebar remains unchanged.
+def _sync_mobile_navigation():
+    selected = st.session_state.get("mobile_main_navigation")
+    if selected:
+        st.session_state["main_navigation"] = selected
+        st.session_state["page"] = selected
+
+with st.container(key="mobile_navigation"):
+    mobile_page = st.radio(
+        "Navigation", menu,
+        index=menu.index(st.session_state.get("page", menu[0])) if st.session_state.get("page", menu[0]) in menu else 0,
+        horizontal=True, key="mobile_main_navigation",
+        label_visibility="collapsed", on_change=_sync_mobile_navigation
+    )
+
+if mobile_page != page:
+    page = mobile_page
+    st.session_state["main_navigation"] = page
+    st.session_state["page"] = page
+    # Reset submenu defaults when changing the top-level page on mobile.
+    dispatch_choice = ""
+    util_choice = ""
+    dispatched_choice = ""
+    if page == "Pending to Dispatched":
+        if role_name == "staff":
+            mobile_dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        else:
+            mobile_dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        dispatch_choice = mobile_dispatch_options[0]
+    elif page == "Utilities":
+        mobile_util_options = ["Order History / Order List", "Cancelled Orders"]
+        if role_name in ("admin", "member"):
+            mobile_util_options = ["Item Master", "Agent Master"] + mobile_util_options
+        if is_admin(): mobile_util_options.append("Admin Panel / Backup & Restore")
+        util_choice = mobile_util_options[0]
+    elif page == "Dispatched Details":
+        dispatched_choice = "Party Wise Dispatched History"
+
+# Mobile submenu selectors sit in the same row panel, below the top-level menu.
+if page == "Pending to Dispatched":
+    if role_name == "staff":
+        _opts = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+    else:
+        _opts = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+    dispatch_choice = st.selectbox("Pending to Dispatched", _opts, index=(_opts.index(dispatch_choice) if dispatch_choice in _opts else 0), key="mobile_pending_dispatch_submenu")
+elif page == "Utilities":
+    _opts = ["Item Master", "Agent Master", "Order History / Order List", "Cancelled Orders"] if role_name in ("admin", "member") else ["Order History / Order List", "Cancelled Orders"]
+    if is_admin(): _opts.append("Admin Panel / Backup & Restore")
+    util_choice = st.selectbox("Utilities", _opts, index=(_opts.index(util_choice) if util_choice in _opts else 0), key="mobile_utilities_submenu")
+elif page == "Dispatched Details":
+    _opts = ["Party Wise Dispatched History", "Agent Wise Dispatched History"]
+    dispatched_choice = st.selectbox("Dispatched Details", _opts, index=(_opts.index(dispatched_choice) if dispatched_choice in _opts else 0), key="mobile_dispatched_submenu")
+
+st.session_state["page"]=page
 if role_name == "agent":
     if page == "My Dashboard": page_agent_portal("dashboard")
     elif page == "My Party Pending Orders": page_agent_portal("pending")
