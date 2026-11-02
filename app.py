@@ -39,13 +39,8 @@ header[data-testid="stHeader"] [data-testid="stToolbar"] button:not([data-testid
 /* Consistent professional page surface and spacing. */
 [data-testid="stMainBlockContainer"]{padding-bottom:2.5rem!important}
 [data-testid="stVerticalBlock"]>div:has(>.brandbar){margin-bottom:.8rem}
-/* Sidebar surface and navigation styling. */
-[data-testid="stSidebar"]{background:#f8f6ef!important;color:#111827!important;border-right:1px solid #e5e0d5!important;z-index:1000!important}
-[data-testid="stSidebar"] *{color:#111827!important}
-[data-testid="stSidebar"] [data-testid="stRadio"] label{padding:.5rem .6rem;border-radius:7px;color:#111827!important}
-[data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:#eae5d8!important}
-[data-testid="stSidebar"] [data-testid="stRadio"] label[data-checked="true"]{background:#e5dfd0!important;font-weight:700!important}
-[data-testid="stSidebar"] [data-testid="stRadio"] label p{color:#111827!important}
+/* Navigation is rendered as a horizontal row below the brand header on desktop and mobile. */
+[data-testid="stSidebar"]{display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;max-width:0!important}
 .brandbar{background:linear-gradient(115deg,#102844 0%,#174b70 58%,#1c6680 100%);color:#fff;border:1px solid #244d6c;border-radius:15px;padding:17px 22px;display:flex;align-items:center;gap:16px;margin:0 0 1.25rem;box-shadow:0 8px 24px rgba(16,40,68,.13);min-height:88px}
 .brandlogo{width:58px;height:58px;object-fit:contain;background:#fff;border-radius:11px;padding:5px;flex:0 0 auto}
 .brandcopy{display:flex;flex-direction:column;gap:4px;min-width:0}.brandtitle{font-weight:850;font-size:1.5rem;letter-spacing:1.1px;line-height:1.15;color:#fff!important}.brandsub{color:#d7e7f2;font-size:.78rem;letter-spacing:.65px;font-weight:600}.brandmeta{margin-left:auto;color:#e3edf5;font-size:.78rem;border:1px solid #6b91a9;border-radius:999px;padding:7px 12px;white-space:nowrap}
@@ -79,38 +74,15 @@ div.stButton>button[kind="primary"] *, [data-testid="stFormSubmitButton"] button
 hr{border-color:#dbe4ef!important}
 @media(max-width:800px){
  .block-container{padding-left:.7rem;padding-right:.7rem}.brandbar{padding:12px;gap:10px;min-height:72px}.brandlogo{width:44px;height:44px}.brandtitle{font-size:1.08rem}.brandsub{font-size:.65rem}.brandmeta{display:none}
- /* Mobile: visible native reopen control while drawer is closed. */
- header[data-testid="stHeader"] [data-testid="collapsedControl"],
- header[data-testid="stHeader"] button[data-testid="collapsedControl"]{
-  display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;
-  position:fixed!important;top:4.2rem!important;left:.55rem!important;
-  width:2.8rem!important;min-width:2.8rem!important;height:2.8rem!important;min-height:2.8rem!important;
-  align-items:center!important;justify-content:center!important;background:#173b5c!important;color:#fff!important;
-  border:2px solid #fff!important;border-radius:10px!important;box-shadow:0 3px 12px rgba(0,0,0,.24)!important;z-index:2147483000!important
- }
- header[data-testid="stHeader"] [data-testid="collapsedControl"] svg,
- header[data-testid="stHeader"] button[data-testid="collapsedControl"] svg{display:block!important;visibility:visible!important;opacity:1!important;fill:#fff!important;color:#fff!important;width:1.35rem!important;height:1.35rem!important}
- /* Native close control remains visible inside the open drawer. */
- [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
- [data-testid="stSidebar"] button[kind="header"]{
-  display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;
-  position:sticky!important;top:.35rem!important;margin-left:auto!important;margin-right:.35rem!important;
-  width:2.8rem!important;min-width:2.8rem!important;height:2.8rem!important;min-height:2.8rem!important;
-  align-items:center!important;justify-content:center!important;background:#173b5c!important;color:#fff!important;
-  border:2px solid #fff!important;border-radius:10px!important;z-index:2147483000!important
- }
- [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg,
- [data-testid="stSidebar"] button[kind="header"] svg{display:block!important;visibility:visible!important;opacity:1!important;fill:#fff!important;color:#fff!important;width:1.35rem!important;height:1.35rem!important}
- [data-testid="stSidebar"]{display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;max-width:0!important;transform:translateX(-110%)!important}
- /* Mobile navigation is rendered in the main page directly under the brand header. */
- .st-key-mobile_navigation{display:block!important;background:#f8f6ef;border:1px solid #d9e2ec;border-radius:12px;padding:8px 10px;margin:0 0 16px 0;box-shadow:0 3px 10px rgba(19,43,74,.08);position:relative;z-index:20}
- .st-key-mobile_navigation [data-testid="stRadio"]>div{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;gap:6px!important}
- .st-key-mobile_navigation [data-testid="stRadio"] label{background:#fff!important;border:1px solid #cbd5e1!important;border-radius:8px!important;padding:7px 10px!important;margin:0!important;min-height:36px!important}
- .st-key-mobile_navigation [data-testid="stRadio"] label[data-checked="true"]{background:#173b5c!important;border-color:#173b5c!important}
- .st-key-mobile_navigation [data-testid="stRadio"] label[data-checked="true"] *{color:#fff!important}
- .st-key-mobile_navigation [data-testid="stRadio"] label p{font-size:13px!important;font-weight:650!important;margin:0!important}
+ /* Same horizontal navigation row is used on phones; it wraps neatly when needed. */
+ .st-key-top_navigation{display:block!important;background:#f8f6ef;border:1px solid #d9e2ec;border-radius:12px;padding:8px 10px;margin:0 0 16px 0;box-shadow:0 3px 10px rgba(19,43,74,.08);position:relative;z-index:20}
+ .st-key-top_navigation [data-testid="stRadio"]>div{display:flex!important;flex-direction:row!important;flex-wrap:wrap!important;gap:6px!important}
+ .st-key-top_navigation [data-testid="stRadio"] label{background:#fff!important;border:1px solid #cbd5e1!important;border-radius:8px!important;padding:7px 10px!important;margin:0!important;min-height:36px!important}
+ .st-key-top_navigation [data-testid="stRadio"] label[data-checked="true"]{background:#173b5c!important;border-color:#173b5c!important}
+ .st-key-top_navigation [data-testid="stRadio"] label[data-checked="true"] *{color:#fff!important}
+ .st-key-top_navigation [data-testid="stRadio"] label p{font-size:13px!important;font-weight:650!important;margin:0!important}
 }
-@media(min-width:801px){.st-key-mobile_navigation{display:none!important}}
+
 
 </style>
 """
@@ -1656,101 +1628,59 @@ elif role_name == "agent":
 else:
     # Staff is read-only for reports; no order creation, dispatch actions, history or full reports.
     menu=["Dashboard","Pending to Dispatched","Dispatched Details"]
-with st.sidebar:
-    logo=BASE/"static"/"shubhvastra_logo.png"
-    if logo.exists(): st.image(str(logo),width=125)
-    st.markdown("### SHUBHVASTRA")
-    st.caption(f"Order Management · 2026 · {user['role'].title()}")
-    st.caption(f"Logged in: {user['username']}")
-    if st.button("Logout",use_container_width=True):
-        st.session_state.pop("authenticated_user",None)
-        st.session_state.pop("main_navigation",None)
-        st.rerun()
-    # The navigation options depend on the logged-in role. A previous session may
-    # leave a page name such as "Dashboard" selected, which is not valid for Agent.
-    default=st.session_state.get("page", menu[0])
-    if default not in menu:
-        default=menu[0]
-    # Keep the radio widget's stored value aligned with the role-specific menu.
-    if st.session_state.get("main_navigation") not in menu:
-        st.session_state["main_navigation"] = default
-    page=st.radio("Navigation",menu,index=menu.index(default),key="main_navigation")
-    if page == "Pending to Dispatched":
-        if role_name == "staff":
-            dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
-        else:
-            dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
-        dispatch_choice = st.selectbox("Pending to Dispatched", dispatch_options, key="pending_dispatch_submenu")
-    else:
-        dispatch_choice = ""
-    if page == "Utilities":
-        util_options = ["Order History / Order List", "Cancelled Orders"]
-        if role_name in ("admin", "member"):
-            util_options.insert(0, "Agent Master")
-            util_options.insert(0, "Item Master")
-        if is_admin():
-            util_options.append("Admin Panel / Backup & Restore")
-        util_choice = st.selectbox("Utilities", util_options, key="utilities_submenu")
-    elif page == "Dispatched Details":
-        dispatched_options = ["Party Wise Dispatched History", "Agent Wise Dispatched History"]
-        dispatched_choice = st.selectbox("Dispatched Details", dispatched_options, key="dispatched_details_submenu")
-    else:
-        util_choice = ""
-        dispatched_choice = ""
-
-# On phones, replace the sidebar with a horizontal navigation row immediately
-# below the SHUBHVASTRA brand header. The desktop sidebar remains unchanged.
-def _sync_mobile_navigation():
-    selected = st.session_state.get("mobile_main_navigation")
+# Navigation appears in a horizontal row below the brand header on desktop and mobile.
+# Keep role-specific menus and submenu permissions unchanged.
+def _sync_top_navigation():
+    selected = st.session_state.get("top_main_navigation")
     if selected:
         st.session_state["main_navigation"] = selected
         st.session_state["page"] = selected
 
-with st.container(key="mobile_navigation"):
-    mobile_page = st.radio(
-        "Navigation", menu,
-        index=menu.index(st.session_state.get("page", menu[0])) if st.session_state.get("page", menu[0]) in menu else 0,
-        horizontal=True, key="mobile_main_navigation",
-        label_visibility="collapsed", on_change=_sync_mobile_navigation
-    )
+current_page = st.session_state.get("page", menu[0])
+if current_page not in menu:
+    current_page = menu[0]
+if st.session_state.get("main_navigation") not in menu:
+    st.session_state["main_navigation"] = current_page
 
-if mobile_page != page:
-    page = mobile_page
-    st.session_state["main_navigation"] = page
-    st.session_state["page"] = page
-    # Reset submenu defaults when changing the top-level page on mobile.
-    dispatch_choice = ""
-    util_choice = ""
-    dispatched_choice = ""
-    if page == "Pending to Dispatched":
-        if role_name == "staff":
-            mobile_dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
-        else:
-            mobile_dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
-        dispatch_choice = mobile_dispatch_options[0]
-    elif page == "Utilities":
-        mobile_util_options = ["Order History / Order List", "Cancelled Orders"]
-        if role_name in ("admin", "member"):
-            mobile_util_options = ["Item Master", "Agent Master"] + mobile_util_options
-        if is_admin(): mobile_util_options.append("Admin Panel / Backup & Restore")
-        util_choice = mobile_util_options[0]
-    elif page == "Dispatched Details":
-        dispatched_choice = "Party Wise Dispatched History"
+with st.container(key="top_navigation"):
+    st.markdown("**Navigation Menu**")
+    nav_col, logout_col = st.columns([9, 1])
+    with nav_col:
+        page = st.radio(
+            "Navigation", menu,
+            index=menu.index(st.session_state.get("main_navigation", current_page)),
+            horizontal=True, key="top_main_navigation",
+            label_visibility="collapsed", on_change=_sync_top_navigation
+        )
+    with logout_col:
+        if st.button("Logout", key="top_navigation_logout", use_container_width=True):
+            st.session_state.pop("authenticated_user", None)
+            st.session_state.pop("main_navigation", None)
+            st.session_state.pop("top_main_navigation", None)
+            st.rerun()
 
-# Mobile submenu selectors sit in the same row panel, below the top-level menu.
 if page == "Pending to Dispatched":
     if role_name == "staff":
-        _opts = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
     else:
-        _opts = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
-    dispatch_choice = st.selectbox("Pending to Dispatched", _opts, index=(_opts.index(dispatch_choice) if dispatch_choice in _opts else 0), key="mobile_pending_dispatch_submenu")
+        dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+    dispatch_choice = st.selectbox("Pending to Dispatched", dispatch_options, key="top_pending_dispatch_submenu")
 elif page == "Utilities":
-    _opts = ["Item Master", "Agent Master", "Order History / Order List", "Cancelled Orders"] if role_name in ("admin", "member") else ["Order History / Order List", "Cancelled Orders"]
-    if is_admin(): _opts.append("Admin Panel / Backup & Restore")
-    util_choice = st.selectbox("Utilities", _opts, index=(_opts.index(util_choice) if util_choice in _opts else 0), key="mobile_utilities_submenu")
-elif page == "Dispatched Details":
-    _opts = ["Party Wise Dispatched History", "Agent Wise Dispatched History"]
-    dispatched_choice = st.selectbox("Dispatched Details", _opts, index=(_opts.index(dispatched_choice) if dispatched_choice in _opts else 0), key="mobile_dispatched_submenu")
+    util_options = ["Order History / Order List", "Cancelled Orders"]
+    if role_name in ("admin", "member"):
+        util_options.insert(0, "Agent Master")
+        util_options.insert(0, "Item Master")
+    if is_admin():
+        util_options.append("Admin Panel / Backup & Restore")
+    util_choice = st.selectbox("Utilities", util_options, key="top_utilities_submenu")
+else:
+    util_choice = ""
+if page == "Dispatched Details":
+    dispatched_options = ["Party Wise Dispatched History", "Agent Wise Dispatched History"]
+    dispatched_choice = st.selectbox("Dispatched Details", dispatched_options, key="top_dispatched_details_submenu")
+else:
+    dispatched_choice = ""
+
 
 st.session_state["page"]=page
 if role_name == "agent":
