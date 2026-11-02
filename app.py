@@ -23,12 +23,18 @@ CSS = """
 <style>
 :root{--navy:#132b4a;--blue:#1769aa;--blue2:#eaf3fb;--line:#dfe6ef;--muted:#64748b}
 .stApp{background:#f3f6fa;color:#1d2a3b}.block-container{padding-top:1.35rem;max-width:1500px}
-/* Hide Streamlit's in-app toolbar, menu, GitHub/star/share controls and deploy button. */
-/* Keep Streamlit's native sidebar expand/collapse control available. Hide only app chrome, not the header container. */
-header[data-testid="stHeader"]{display:flex!important;visibility:visible!important;height:2.75rem!important;background:transparent!important}
-header[data-testid="stHeader"] [data-testid="stToolbar"], #MainMenu, [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"]{display:none!important;visibility:hidden!important}
-header[data-testid="stHeader"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
-[data-testid="stDecoration"]{display:none!important}
+/* Keep the Streamlit header shell available so its native sidebar reopen control never disappears. */
+/* Hide toolbar actions (Share/star/GitHub/menu) but explicitly preserve the collapsed-sidebar control. */
+header[data-testid="stHeader"]{display:flex!important;visibility:visible!important;height:2.75rem!important;background:transparent!important;z-index:1005!important}
+header[data-testid="stHeader"] [data-testid="stToolbar"]{display:flex!important;visibility:visible!important;background:transparent!important}
+header[data-testid="stHeader"] [data-testid="stToolbar"] [data-testid="stToolbarActions"],
+header[data-testid="stHeader"] [data-testid="stToolbar"] a,
+header[data-testid="stHeader"] [data-testid="stToolbar"] button:not([data-testid="collapsedControl"]){display:none!important;visibility:hidden!important}
+header[data-testid="stHeader"] [data-testid="collapsedControl"],
+header[data-testid="stHeader"] button[data-testid="collapsedControl"],
+header[data-testid="stHeader"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;position:relative!important;z-index:1010!important}
+[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"]{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;z-index:1010!important}
+#MainMenu, [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"], [data-testid="stDecoration"]{display:none!important;visibility:hidden!important}
 /* Consistent professional page surface and spacing. */
 [data-testid="stMainBlockContainer"]{padding-bottom:2.5rem!important}
 [data-testid="stVerticalBlock"]>div:has(>.brandbar){margin-bottom:.8rem}
@@ -73,7 +79,9 @@ div.stButton>button[kind="primary"] *, [data-testid="stFormSubmitButton"] button
 hr{border-color:#dbe4ef!important}
 @media(max-width:800px){
 .block-container{padding-left:.7rem;padding-right:.7rem}.brandbar{padding:12px;gap:10px;min-height:72px}.brandlogo{width:44px;height:44px}.brandtitle{font-size:1.08rem}.brandsub{font-size:.65rem}.brandmeta{display:none}
-/* Mobile: leave the native Streamlit sidebar toggle and drawer behavior untouched. */
+/* Mobile: preserve native drawer reopen button and make its touch target visible. */
+header[data-testid="stHeader"] [data-testid="collapsedControl"],
+header[data-testid="stHeader"] button[data-testid="collapsedControl"]{min-width:2.5rem!important;min-height:2.5rem!important;display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
 }
 
 </style>
