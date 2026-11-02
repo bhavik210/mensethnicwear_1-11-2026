@@ -1673,13 +1673,17 @@ div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] svg,
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] [data-testid="stRadioButton"]{display:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] > div:first-child{display:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"]{
-  background:#ffffff!important;border:1px solid #ffffff!important;
-  color:#123653!important;box-shadow:inset 0 -2px 0 #c32682!important;
+  background:#c32682!important;border:1px solid #e15aa7!important;
+  color:#ffffff!important;box-shadow:inset 0 -2px 0 rgba(255,255,255,.35)!important;
 }
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"],
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] *,
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] p,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] span{
-  color:inherit!important;font-size:13px!important;font-weight:650!important;
-  margin:0!important;white-space:nowrap!important;
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] span,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] label{
+  color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;
+  font-size:13px!important;font-weight:650!important;
+  margin:0!important;white-space:nowrap!important;text-decoration:none!important;
 }
 div[class*="st-key-top_navigation"] [data-testid="stButton"]{margin:0!important;padding:0!important;}
 div[class*="st-key-top_navigation"] [data-testid="stButton"] button{
