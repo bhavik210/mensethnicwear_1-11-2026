@@ -811,58 +811,74 @@ def page_order_form(edit_id=None):
     st.subheader("Item Details")
     sku_options=[""]+skus.sku_number.tolist()
     rows=[]
-    header=st.columns([.5,3,1,1,1,1,1.2,1.3,1.2])
-    for col,label in zip(header,["Sr.","Particulars / SKU","M","L","XL","XXL","Discount","WSP Rate (₹)","Qty"]): col.markdown(f"**{label}**")
+    # Responsive item cards: SKU, sizes, pricing and total quantity are stacked
+    # so the form remains usable on narrow phone screens as well as desktop.
+    st.markdown("""<style>
+    div[class*="st-key-order_item_card_"] {border:1px solid #d7e0ea;border-radius:12px;padding:12px 12px 8px;margin:0 0 12px;background:#fff;}
+    div[class*="st-key-order_item_card_"] [data-testid="stVerticalBlock"]{gap:.45rem!important;}
+    div[class*="st-key-order_item_card_"] [data-testid="stWidgetLabel"] label{font-size:13px!important;font-weight:600!important;color:#29445f!important;}
+    div[class*="st-key-order_item_card_"] input{color:#172b43!important;-webkit-text-fill-color:#172b43!important;}
+    @media(max-width:700px){
+      div[class*="st-key-order_item_card_"]{padding:10px 9px!important;margin-bottom:10px!important;}
+      div[class*="st-key-order_item_card_"] [data-testid="stHorizontalBlock"]{gap:6px!important;flex-wrap:wrap!important;}
+      div[class*="st-key-order_item_card_"] [data-testid="column"]{min-width:calc(50% - 6px)!important;flex:1 1 calc(50% - 6px)!important;}
+      div[class*="st-key-order_item_card_"] [data-testid="stWidgetLabel"] label{font-size:12px!important;}
+      div[class*="st-key-order_item_card_"] input{min-height:40px!important;font-size:14px!important;}
+      div[class*="st-key-order_item_card_"] [data-testid="stNumberInput"] button{display:none!important;}
+    }
+    </style>""",unsafe_allow_html=True)
     last_filled=False
     for ix in range(row_count):
         old=old_items.iloc[ix] if edit_id and ix<len(old_items) else None
-        c=st.columns([.5,3,1,1,1,1,1.2,1.3,1.2])
-        c[0].write(str(ix+1))
-        skey=f"ord_sku_{ix}"
-        if skey not in st.session_state: st.session_state[skey]=str(old.particulars) if old is not None else ""
-        cur=st.session_state[skey]
-        previous_sku_key=f"ord_last_sku_{ix}"
-        previous_sku=st.session_state.get(previous_sku_key, cur)
-        opts=sku_options.copy()
-        if cur and cur not in opts: opts.insert(1,cur)
-        sku=c[1].selectbox("Particulars / SKU",opts,index=opts.index(cur) if cur in opts else 0,key=skey,label_visibility="collapsed")
-        sku_rate=float(skus.loc[skus.sku_number==sku,"sale_rate"].iloc[0]) if not skus.empty and sku in skus.sku_number.tolist() else 0.0
-        visible_rate_key=f"ord_rate_visible_{ix}_{edit_id or 'new'}"
-        if sku != previous_sku:
-            st.session_state[visible_rate_key]=sku_rate
-        st.session_state[previous_sku_key]=sku
-        rate_default=float(old.piece_rate) if old is not None else sku_rate
-        rkey=f"ord_rate_{ix}"
-        if edit_id:
-            if rkey not in st.session_state: st.session_state[rkey]=rate_default
-            rate=float(st.session_state.get(rkey,rate_default) or 0)
-        else:
-            rate=sku_rate
-            st.session_state[rkey]=sku_rate
-        sizes={}
-        for j,size in enumerate(SIZES):
-            qkey=f"ord_qty_{ix}_{size}"
-            if qkey not in st.session_state: st.session_state[qkey]=0
-            sizes[size]=c[2+j].number_input(size,min_value=0,step=1,key=qkey,label_visibility="collapsed")
-        disc_key=f"ord_disc_{ix}"
-        if disc_key not in st.session_state: st.session_state[disc_key]=f"{float(old.discount) if old is not None else 0.0:.2f}"
-        else: st.session_state[disc_key]=str(st.session_state[disc_key])
-        disc_text=c[6].text_input("Discount",key=disc_key,label_visibility="collapsed",disabled=bool(edit_id),placeholder="0.00")
-        try:
-            disc=float(str(disc_text or "0").replace(",", "").strip() or 0)
-            if disc < 0: raise ValueError
-        except ValueError:
-            st.error(f"Row {ix+1}: Discount માં માન્ય શૂન્ય અથવા positive rate લખો.")
-            disc=0.0
-        if visible_rate_key not in st.session_state:
-            st.session_state[visible_rate_key]=f"{float(rate):.2f}"
-        else:
-            st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
-        c[7].text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True,label_visibility="collapsed")
-        qty=sum(sizes.values())
-        c[8].markdown(f"**{qty}**")
-        rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
-        if ix==row_count-1 and (sku or qty>0): last_filled=True
+        with st.container(key=f"order_item_card_{ix}",border=False):
+            st.markdown(f"**Item {ix+1}**")
+            skey=f"ord_sku_{ix}"
+            if skey not in st.session_state: st.session_state[skey]=str(old.particulars) if old is not None else ""
+            cur=st.session_state[skey]
+            previous_sku_key=f"ord_last_sku_{ix}"
+            previous_sku=st.session_state.get(previous_sku_key,cur)
+            opts=sku_options.copy()
+            if cur and cur not in opts: opts.insert(1,cur)
+            sku=st.selectbox("SKU Code / Particulars",opts,index=opts.index(cur) if cur in opts else 0,key=skey)
+            sku_rate=float(skus.loc[skus.sku_number==sku,"sale_rate"].iloc[0]) if not skus.empty and sku in skus.sku_number.tolist() else 0.0
+            visible_rate_key=f"ord_rate_visible_{ix}_{edit_id or 'new'}"
+            if sku != previous_sku:
+                st.session_state[visible_rate_key]=f"{sku_rate:.2f}"
+            st.session_state[previous_sku_key]=sku
+            rate_default=float(old.piece_rate) if old is not None else sku_rate
+            rkey=f"ord_rate_{ix}"
+            if edit_id:
+                if rkey not in st.session_state: st.session_state[rkey]=rate_default
+                rate=float(st.session_state.get(rkey,rate_default) or 0)
+            else:
+                rate=sku_rate
+                st.session_state[rkey]=sku_rate
+            size_cols=st.columns(4)
+            sizes={}
+            for j,size in enumerate(SIZES):
+                qkey=f"ord_qty_{ix}_{size}"
+                if qkey not in st.session_state: st.session_state[qkey]=0
+                sizes[size]=size_cols[j].number_input(size,min_value=0,step=1,key=qkey)
+            disc_key=f"ord_disc_{ix}"
+            if disc_key not in st.session_state: st.session_state[disc_key]=f"{float(old.discount) if old is not None else 0.0:.2f}"
+            else: st.session_state[disc_key]=str(st.session_state[disc_key])
+            disc_text, rate_col, qty_col=st.columns([1,1,1])
+            disc_text_value=disc_text.text_input("Discount",key=disc_key,disabled=bool(edit_id),placeholder="0.00")
+            try:
+                disc=float(str(disc_text_value or "0").replace(",", "").strip() or 0)
+                if disc<0: raise ValueError
+            except ValueError:
+                st.error(f"Row {ix+1}: Discount માં માન્ય શૂન્ય અથવા positive rate લખો.")
+                disc=0.0
+            if visible_rate_key not in st.session_state:
+                st.session_state[visible_rate_key]=f"{float(rate):.2f}"
+            else:
+                st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
+            rate_col.text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True)
+            qty=sum(sizes.values())
+            qty_col.text_input("QTY",value=f"{qty} Pcs",disabled=True,key=f"ord_total_qty_{ix}")
+            rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
+            if ix==row_count-1 and (sku or qty>0): last_filled=True
 
     if last_filled and row_count<999:
         st.session_state["new_order_row_count"]=row_count+1
@@ -1138,21 +1154,21 @@ def page_dispatch(view='dispatch'):
            ORDER BY o.order_no DESC,i.sr_no,s.size_code""",{'pid':int(pid)})
         df['Pending Qty']=(df['Order Qty'].astype(int)-df['dispatched'].astype(int)-df['cancelled_qty'].astype(int)).clip(lower=0)
         df=df[df['Pending Qty']>0]
-        # Compact, readable piece-wise dispatch preview. Each pending piece remains
-        # an independent selectable row; the PDF report layout is intentionally untouched.
-        st.markdown('''<style>
-        div[class*="st-key-dispatch_piece_row_"] {padding: 2px 8px !important; margin: 0 0 2px 0 !important; border: 1px solid #d9e2ec; border-radius: 6px; background: rgba(255,255,255,.72);}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"] {gap: 0 !important; padding: 0 !important;}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stHorizontalBlock"] {gap: .35rem !important; align-items: center !important;}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stMarkdownContainer"] p {margin: 0 !important; padding: 0 !important; line-height: 1.15 !important;}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] {display:none;}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] {display:none;}
-        div[class*="st-key-dispatch_piece_row_"] input {min-height: 34px;}
-        </style>''', unsafe_allow_html=True)
-        row_widths=[1.0,1.0,1.15,.5,.65,.75,.55,1.55,.6]
-        header=st.columns(row_widths,vertical_alignment='center')
-        for col,label in zip(header,['Order No.','Order Date','SKU Code','Size','Dispatch','Order Qty','Qty','Details','Cancel']):
-            col.markdown(f'**{label}**')
+        # Responsive piece cards: clear order details and large touch controls on phones.
+        st.markdown("""<style>
+        div[class*="st-key-dispatch_piece_row_"]{border:1px solid #d6e0ea!important;border-radius:10px!important;background:#fff!important;padding:10px!important;margin:0 0 9px!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"]{gap:.45rem!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] label{font-size:12px!important;font-weight:650!important;color:#29445f!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stMarkdownContainer"] p{margin:0!important;color:#172b43!important;}
+        div[class*="st-key-dispatch_piece_row_"] input{min-height:40px!important;color:#172b43!important;}
+        @media(max-width:700px){
+          div[class*="st-key-dispatch_piece_row_"]{padding:9px!important;}
+          div[class*="st-key-dispatch_piece_row_"] [data-testid="stHorizontalBlock"]{gap:6px!important;flex-wrap:wrap!important;}
+          div[class*="st-key-dispatch_piece_row_"] [data-testid="column"]{min-width:calc(50% - 6px)!important;flex:1 1 calc(50% - 6px)!important;}
+          div[class*="st-key-dispatch_piece_row_"] [data-testid="stCheckbox"] label{font-size:14px!important;min-height:40px!important;}
+          div[class*="st-key-dispatch_piece_row_"] input{font-size:14px!important;}
+        }
+        </style>""",unsafe_allow_html=True)
         selected=[]
         for _,r in df.iterrows():
             size_id=int(r['size_id']); pending=int(r['Pending Qty'])
@@ -1162,23 +1178,24 @@ def page_dispatch(view='dispatch'):
                 dispatch_checked=bool(st.session_state.get(dispatch_key,False))
                 cancel_checked=bool(st.session_state.get(cancel_key,False))
                 with st.container(key=f'dispatch_piece_row_{token}',border=False):
-                    c=st.columns(row_widths,vertical_alignment='center')
-                    c[0].write(str(r['Order No.']))
-                    c[1].write(pd.to_datetime(r['Order Date']).strftime('%d-%m-%Y'))
-                    c[2].write(str(r['SKU Code']))
-                    c[3].write(str(r['Size']))
+                    st.markdown(f"**Order No. {r['Order No.']}**  ·  **Date:** {pd.to_datetime(r['Order Date']).strftime('%d-%m-%Y')}")
+                    meta=st.columns(2)
+                    meta[0].markdown(f"**SKU Code**  \\n{r['SKU Code']}")
+                    meta[1].markdown(f"**Size**  \\n{r['Size']}")
+                    actions=st.columns(3)
                     if not cancel_checked:
-                        dispatch_checked=c[4].checkbox('Dispatch',key=dispatch_key,label_visibility='collapsed')
-                    else: c[4].write('—')
-                    c[5].write(int(r['Order Qty']))
-                    c[6].markdown('<span style="color:#172b4d;font-weight:600;font-size:14px;">1 Pcs</span>',unsafe_allow_html=True)
-                    details=c[7].text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}',label_visibility='collapsed')
+                        dispatch_checked=actions[0].checkbox('Dispatch',key=dispatch_key)
+                    else:
+                        actions[0].markdown("**Dispatch**  \\n—")
+                    actions[1].markdown(f"**Order Qty**  \\n{int(r['Order Qty'])} Pcs")
+                    actions[2].markdown("**Qty**  \\n1 Pcs")
+                    details=st.text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}')
                     if not dispatch_checked:
-                        cancel_checked=c[8].checkbox('Cancel',key=cancel_key,label_visibility='collapsed')
-                    else: c[8].write('—')
+                        cancel_checked=st.checkbox('Cancel',key=cancel_key)
+                    else:
+                        st.markdown("**Cancel**  \\n—")
                     if dispatch_checked or cancel_checked:
                         selected.append((size_id,str(r['Size']),details,'dispatch' if dispatch_checked else 'cancel',token))
-                st.markdown('<div style="height:3px"></div>',unsafe_allow_html=True)
         if st.button('Save to Dispatched',type='primary',use_container_width=True,key='save_to_dispatched'):
             if not selected:
                 st.info('પહેલાં Dispatch અથવા Cancel checkbox પસંદ કરો.')
