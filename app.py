@@ -1643,18 +1643,61 @@ if st.session_state.get("main_navigation") not in menu:
     st.session_state["main_navigation"] = current_page
 
 st.markdown("""<style>
-div[class*="st-key-top_navigation"]{background:#fff;border:1px solid #d9e0e8;border-radius:12px;padding:8px 12px;margin:8px 0 18px;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{background:#fff;border:1px solid #d7dfe8;border-radius:7px;padding:7px 12px;margin:0!important;color:#243b53!important;font-weight:650;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label:has(input:checked){background:#173f60;color:#fff!important;border-color:#173f60;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label p{font-size:13px!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] input{display:none!important;}
-@media(max-width:700px){div[class*="st-key-top_navigation"]{padding:7px!important;}div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{gap:6px!important;}div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{padding:6px 9px!important;}}
+/* Compact premium horizontal navigation */
+div[class*="st-key-top_navigation"]{
+  background:linear-gradient(110deg,#123653 0%,#1c607b 100%);
+  border:1px solid #214e6b;border-radius:12px;
+  padding:6px 10px!important;margin:2px 0 10px!important;
+  box-shadow:0 3px 12px rgba(17,49,74,.10);
+}
+div[class*="st-key-top_navigation"] [data-testid="stMarkdownContainer"] p{
+  color:#f5f9fc!important;font-size:12px!important;font-weight:700!important;
+  letter-spacing:.04em;margin:0 0 4px!important;
+}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"]{margin:0!important;padding:0!important;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] > label{display:none!important;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{
+  display:flex!important;flex-wrap:wrap!important;gap:6px!important;
+  align-items:center!important;margin:0!important;padding:0!important;
+}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  background:rgba(255,255,255,.97)!important;border:1px solid #d5e2eb!important;
+  border-radius:7px!important;padding:6px 11px!important;margin:0!important;
+  min-height:30px!important;color:#183750!important;font-weight:650!important;
+  line-height:1.15!important;box-shadow:none!important;cursor:pointer!important;
+}
+/* Remove the radio-circle icon so navigation looks like a dedicated menu */
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label > div:first-child,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label input,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label svg{display:none!important;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label:has(input:checked){
+  background:#e8f2f7!important;border:1px solid #f0b7d7!important;
+  color:#123653!important;box-shadow:inset 0 -2px 0 #c32682!important;
+}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label p{
+  color:inherit!important;font-size:12px!important;font-weight:650!important;
+  margin:0!important;white-space:nowrap!important;
+}
+div[class*="st-key-top_navigation"] [data-testid="stColumn"]{padding:0!important;}
+div[class*="st-key-top_navigation"] [data-testid="stButton"]{margin:0!important;padding:0!important;}
+div[class*="st-key-top_navigation"] [data-testid="stButton"] button{
+  min-height:30px!important;padding:4px 12px!important;border-radius:7px!important;
+  border:1px solid #d5e2eb!important;background:#fff!important;color:#183750!important;
+  font-size:12px!important;font-weight:650!important;
+}
+div[class*="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:3px!important;}
+div[class*="st-key-top_navigation"] [data-testid="stHorizontalBlock"]{gap:8px!important;align-items:center!important;}
+@media(max-width:700px){
+  div[class*="st-key-top_navigation"]{padding:6px!important;margin:2px 0 8px!important;}
+  div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{gap:5px!important;}
+  div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{padding:6px 9px!important;min-height:29px!important;}
+}
 </style>""",unsafe_allow_html=True)
 
 with st.container(key="top_navigation"):
-    st.markdown("**Navigation Menu**")
-    nav_col, logout_col = st.columns([9, 1])
+    st.markdown("NAVIGATION", help="Choose a section")
+    nav_col, logout_col = st.columns([10, 1], gap="small")
     with nav_col:
         page = st.radio(
             "Navigation", menu,
