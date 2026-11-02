@@ -392,7 +392,7 @@ def table(sql, params=None, key=None):
 
 def get_parties(): return q("SELECT p.id,p.party_name,p.phone_number,p.address,p.city,p.state,p.gst_number,p.reference,p.transport_details,p.transport_gst_number,p.agent_id,COALESCE(a.agent_name,'') agent_name FROM parties p LEFT JOIN agents a ON a.id=p.agent_id ORDER BY p.party_name")
 def get_skus(): return q("SELECT id,sku_number,sku_under,sale_rate FROM sku_master ORDER BY sku_number")
-def get_order_no(): return int(one("SELECT COALESCE(MAX(order_no),1100)+1 AS n FROM orders")["n"])
+def get_order_no(): return int(one("SELECT COALESCE(MAX(order_no),2100)+1 AS n FROM orders")["n"])
 def get_dispatch_total(size_id): return int(one("SELECT COALESCE(SUM(qty),0) AS n FROM order_dispatches WHERE order_size_id=:id", {"id":int(size_id)})["n"])
 
 
@@ -909,7 +909,7 @@ def page_order_form(edit_id=None):
                     order_no=int(existing["order_no"])
                 else:
                     if engine.dialect.name == "postgresql": conn.execute(text("LOCK TABLE orders IN EXCLUSIVE MODE"))
-                    order_no=int(conn.execute(text("SELECT COALESCE(MAX(order_no),1100)+1 FROM orders")).scalar_one())
+                    order_no=int(conn.execute(text("SELECT COALESCE(MAX(order_no),2100)+1 FROM orders")).scalar_one())
                     oid=conn.execute(text("INSERT INTO orders(order_no,order_date,delivery_date,party_id,packaging,gst_type,narration) VALUES(:no,:d,:dd,:p,:pack,:gst,:n) RETURNING id"),{"no":order_no,"d":od,"dd":delivery_date,"p":int(party_id),"pack":json.dumps(packaging),"gst":gst,"n":narration.strip()}).scalar_one()
                 for ix,r in enumerate(cleaned,1):
                     iid=conn.execute(text("INSERT INTO order_items(order_id,sr_no,particulars,piece_rate,discount) VALUES(:o,:sr,:sku,:rate,:disc) RETURNING id"),{"o":oid,"sr":ix,"sku":r["sku"],"rate":r["rate"],"disc":r["discount"]}).scalar_one()
@@ -1566,11 +1566,43 @@ def page_settings():
     if not is_admin():
         st.error("Utilities ફક્ત Main Admin માટે ઉપલબ્ધ છે.")
         return
-    user_tab, backup_tab = st.tabs(["User Name & Password", "Backup & Restore"])
+    user_tab, backup_tab, reset_tab = st.tabs(["User Name & Password", "Backup & Restore", "Final Go-Live Reset"])
     with user_tab:
         page_users()
     with backup_tab:
         page_backup_restore()
+    with reset_tab:
+        page_final_go_live_reset()
+
+
+def page_final_go_live_reset():
+    """Admin-only, explicitly confirmed cleanup of transactional order data only."""
+    if not is_admin():
+        st.error("આ વિભાગ ફક્ત Main Admin માટે ઉપલબ્ધ છે.")
+        return
+    st.title("Final Go-Live Reset — Demo Orders")
+    st.warning("આ પ્રક્રિયા બધા Orders, Pending quantities, Dispatched history અને Cancelled records કાયમી delete કરશે. Party Master, Agent Master, Item Master (SKU) અને User Login અકબંધ રહેશે.")
+    st.markdown("**Delete થનારા records:** Orders, Order Items, Size quantities, Dispatch entries અને Cancellation entries.\n\n**સુરક્ષિત રહેનારા records:** Parties, Agents, SKU Master અને Users.")
+    st.info("Reset પહેલાં Backup & Restore tab માંથી Full Backup ZIP download કરી લો.")
+    typed = st.text_input("Confirm કરવા માટે નીચે EXACT લખો: DELETE ALL ORDERS", key="final_reset_phrase")
+    confirmed = st.checkbox("હું ખાતરી આપું છું કે backup લીધું છે અને ફક્ત order data delete કરવાનું સમજીને મંજૂરી આપું છું.", key="final_reset_confirm")
+    if st.button("Permanently Delete All Demo Orders", type="primary", disabled=(typed.strip() != "DELETE ALL ORDERS" or not confirmed), key="final_delete_orders"):
+        try:
+            with engine.begin() as conn:
+                # Delete dependent transactional records first; master data is never touched.
+                conn.execute(text("DELETE FROM order_dispatches"))
+                conn.execute(text("DELETE FROM order_size_cancellations"))
+                conn.execute(text("DELETE FROM order_item_sizes"))
+                conn.execute(text("DELETE FROM order_items"))
+                conn.execute(text("DELETE FROM orders"))
+            for key in list(st.session_state.keys()):
+                if key.startswith(("piece_dispatch_", "piece_cancel_", "piece_details_")):
+                    st.session_state.pop(key, None)
+            st.session_state.pop("last_saved_order_id", None)
+            st.session_state.pop("show_pdf_prompt", None)
+            st.success("બધા Demo Orders, Pending, Dispatched અને Cancelled records delete થયા. Party, Agent, SKU અને User data સુરક્ષિત છે. હવે નવો Order Number 2101 થી શરૂ થશે.")
+        except Exception as e:
+            st.error(f"Order data reset થઈ શક્યું નથી: {e}")
 
 def page_backup_restore():
     st.title("Backup & Restore")
