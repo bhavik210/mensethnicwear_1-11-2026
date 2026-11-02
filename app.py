@@ -783,20 +783,20 @@ def page_order_form(edit_id=None):
     st.subheader("Item Details")
     sku_options=[""]+skus.sku_number.tolist()
     rows=[]
-    # Responsive item cards: SKU, sizes, pricing and total quantity are stacked
-    # so the form remains usable on narrow phone screens as well as desktop.
+    # Desktop: one compact horizontal row per item. Mobile: responsive wrapped fields.
     st.markdown("""<style>
-    div[class*="st-key-order_item_card_"] {border:1px solid #d7e0ea;border-radius:12px;padding:12px 12px 8px;margin:0 0 12px;background:#fff;}
-    div[class*="st-key-order_item_card_"] [data-testid="stVerticalBlock"]{gap:.45rem!important;}
-    div[class*="st-key-order_item_card_"] [data-testid="stWidgetLabel"] label{font-size:13px!important;font-weight:600!important;color:#29445f!important;}
-    div[class*="st-key-order_item_card_"] input{color:#172b43!important;-webkit-text-fill-color:#172b43!important;}
+    div[class*="st-key-order_item_card_"] {border:1px solid #d7e0ea;border-radius:10px;padding:10px 12px 8px;margin:0 0 10px;background:#fff;}
+    div[class*="st-key-order_item_card_"] [data-testid="stVerticalBlock"]{gap:.35rem!important;}
+    div[class*="st-key-order_item_card_"] [data-testid="stHorizontalBlock"]{gap:8px!important;align-items:end!important;flex-wrap:nowrap!important;}
+    div[class*="st-key-order_item_card_"] [data-testid="column"]{min-width:0!important;}
+    div[class*="st-key-order_item_card_"] [data-testid="stWidgetLabel"] label{font-size:12px!important;font-weight:650!important;color:#29445f!important;}
+    div[class*="st-key-order_item_card_"] input{color:#172b43!important;-webkit-text-fill-color:#172b43!important;min-height:38px!important;}
+    div[class*="st-key-order_item_card_"] [data-testid="stNumberInput"] button{display:none!important;}
     @media(max-width:700px){
       div[class*="st-key-order_item_card_"]{padding:10px 9px!important;margin-bottom:10px!important;}
-      div[class*="st-key-order_item_card_"] [data-testid="stHorizontalBlock"]{gap:6px!important;flex-wrap:wrap!important;}
-      div[class*="st-key-order_item_card_"] [data-testid="column"]{min-width:calc(50% - 6px)!important;flex:1 1 calc(50% - 6px)!important;}
-      div[class*="st-key-order_item_card_"] [data-testid="stWidgetLabel"] label{font-size:12px!important;}
+      div[class*="st-key-order_item_card_"] [data-testid="stHorizontalBlock"]{gap:7px!important;flex-wrap:wrap!important;}
+      div[class*="st-key-order_item_card_"] [data-testid="column"]{flex:1 1 calc(50% - 7px)!important;min-width:calc(50% - 7px)!important;width:calc(50% - 7px)!important;}
       div[class*="st-key-order_item_card_"] input{min-height:40px!important;font-size:14px!important;}
-      div[class*="st-key-order_item_card_"] [data-testid="stNumberInput"] button{display:none!important;}
     }
     </style>""",unsafe_allow_html=True)
     last_filled=False
@@ -811,7 +811,8 @@ def page_order_form(edit_id=None):
             previous_sku=st.session_state.get(previous_sku_key,cur)
             opts=sku_options.copy()
             if cur and cur not in opts: opts.insert(1,cur)
-            sku=st.selectbox("SKU Code / Particulars",opts,index=opts.index(cur) if cur in opts else 0,key=skey)
+            item_cols=st.columns([2.0,.68,.68,.68,.68,.95,1.05,.85])
+            sku=item_cols[0].selectbox("SKU Code / Particulars",opts,index=opts.index(cur) if cur in opts else 0,key=skey)
             sku_rate=float(skus.loc[skus.sku_number==sku,"sale_rate"].iloc[0]) if not skus.empty and sku in skus.sku_number.tolist() else 0.0
             visible_rate_key=f"ord_rate_visible_{ix}_{edit_id or 'new'}"
             if sku != previous_sku:
@@ -825,17 +826,16 @@ def page_order_form(edit_id=None):
             else:
                 rate=sku_rate
                 st.session_state[rkey]=sku_rate
-            size_cols=st.columns(4)
             sizes={}
             for j,size in enumerate(SIZES):
                 qkey=f"ord_qty_{ix}_{size}"
-                if qkey not in st.session_state: st.session_state[qkey]=0
-                sizes[size]=size_cols[j].number_input(size,min_value=0,step=1,key=qkey)
+                if qkey not in st.session_state: st.session_state[qkey]=None
+                qvalue=item_cols[j+1].number_input(size,min_value=0,step=1,value=st.session_state[qkey],key=qkey,format="%d")
+                sizes[size]=qvalue
             disc_key=f"ord_disc_{ix}"
             if disc_key not in st.session_state: st.session_state[disc_key]=f"{float(old.discount) if old is not None else 0.0:.2f}"
             else: st.session_state[disc_key]=str(st.session_state[disc_key])
-            disc_text, rate_col, qty_col=st.columns([1,1,1])
-            disc_text_value=disc_text.text_input("Discount",key=disc_key,disabled=bool(edit_id),placeholder="0.00")
+            disc_text_value=item_cols[5].text_input("Discount",key=disc_key,disabled=bool(edit_id),placeholder="0.00")
             try:
                 disc=float(str(disc_text_value or "0").replace(",", "").strip() or 0)
                 if disc<0: raise ValueError
@@ -846,9 +846,9 @@ def page_order_form(edit_id=None):
                 st.session_state[visible_rate_key]=f"{float(rate):.2f}"
             else:
                 st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
-            rate_col.text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True)
-            qty=sum(sizes.values())
-            qty_col.text_input("QTY",value=f"{qty} Pcs",disabled=True,key=f"ord_total_qty_{ix}")
+            item_cols[6].text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True)
+            qty=sum(int(v or 0) for v in sizes.values())
+            item_cols[7].text_input("QTY",value=f"{qty} Pcs",disabled=True,key=f"ord_total_qty_{ix}")
             rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
             if ix==row_count-1 and (sku or qty>0): last_filled=True
 
@@ -894,7 +894,7 @@ def page_order_form(edit_id=None):
             cleaned=[]
             for r in rows:
                 if not str(r["sku"]).strip(): continue
-                if sum(int(x) for x in r["sizes"].values())<=0: raise ValueError(f"{r['sku']}: ઓછામાં ઓછી એક size quantity આપો.")
+                if sum(int(x or 0) for x in r["sizes"].values())<=0: raise ValueError(f"{r['sku']}: ઓછામાં ઓછી એક size quantity આપો.")
                 cleaned.append(r)
             if not cleaned: raise ValueError("ઓછામાં ઓછો એક item ઉમેરો.")
             with engine.begin() as conn:
@@ -909,7 +909,7 @@ def page_order_form(edit_id=None):
                 for ix,r in enumerate(cleaned,1):
                     iid=conn.execute(text("INSERT INTO order_items(order_id,sr_no,particulars,piece_rate,discount) VALUES(:o,:sr,:sku,:rate,:disc) RETURNING id"),{"o":oid,"sr":ix,"sku":r["sku"],"rate":r["rate"],"disc":r["discount"]}).scalar_one()
                     for size,qty in r["sizes"].items():
-                        if int(qty)>0: conn.execute(text("INSERT INTO order_item_sizes(order_item_id,size_code,ordered_qty) VALUES(:i,:s,:q)"),{"i":iid,"s":size,"q":int(qty)})
+                        if int(qty or 0)>0: conn.execute(text("INSERT INTO order_item_sizes(order_item_id,size_code,ordered_qty) VALUES(:i,:s,:q)"),{"i":iid,"s":size,"q":int(qty)})
             st.session_state["last_saved_order_id"]=int(oid); st.session_state["show_pdf_prompt"]=True
             st.success(f"Order #{order_no} save થયો. હવે PDF save કરવી છે?")
             st.rerun()
@@ -1164,7 +1164,7 @@ def page_dispatch(view='dispatch'):
                         dispatch_checked=cells[4].checkbox('Dispatch',key=dispatch_key)
                     else:
                         cells[4].markdown('**Dispatch**  \n—')
-                    cells[5].markdown(f'**Order Qty**  \n{int(r["Order Qty"])} Pcs')
+                    cells[5].markdown("**Order Qty**  \n1 Pcs")
                     details=cells[6].text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}')
                     if not dispatch_checked:
                         cancel_checked=cells[7].checkbox('Cancel',key=cancel_key)
@@ -1641,6 +1641,16 @@ if current_page not in menu:
     current_page = menu[0]
 if st.session_state.get("main_navigation") not in menu:
     st.session_state["main_navigation"] = current_page
+
+st.markdown("""<style>
+div[class*="st-key-top_navigation"]{background:#fff;border:1px solid #d9e0e8;border-radius:12px;padding:8px 12px;margin:8px 0 18px;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{background:#fff;border:1px solid #d7dfe8;border-radius:7px;padding:7px 12px;margin:0!important;color:#243b53!important;font-weight:650;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label:has(input:checked){background:#173f60;color:#fff!important;border-color:#173f60;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] label p{font-size:13px!important;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] input{display:none!important;}
+@media(max-width:700px){div[class*="st-key-top_navigation"]{padding:7px!important;}div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{gap:6px!important;}div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{padding:6px 9px!important;}}
+</style>""",unsafe_allow_html=True)
 
 with st.container(key="top_navigation"):
     st.markdown("**Navigation Menu**")
