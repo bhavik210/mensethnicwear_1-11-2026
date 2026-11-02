@@ -23,13 +23,12 @@ CSS = """
 <style>
 :root{--navy:#132b4a;--blue:#1769aa;--blue2:#eaf3fb;--line:#dfe6ef;--muted:#64748b}
 .stApp{background:#f3f6fa;color:#1d2a3b}.block-container{padding-top:1.35rem;max-width:1500px}
-/* Keep the app header clean. Sidebar toggles are mobile-only. */
-header[data-testid="stHeader"]{display:flex!important;visibility:visible!important;height:2.75rem!important;background:transparent!important;z-index:1005!important}
-header[data-testid="stHeader"] [data-testid="stToolbar"]{display:flex!important;visibility:visible!important;background:transparent!important}
+/* Keep Streamlit header available for native sidebar controls. */
+header[data-testid="stHeader"]{display:flex!important;visibility:visible!important;height:3.25rem!important;background:transparent!important;z-index:99999!important;pointer-events:auto!important}
+header[data-testid="stHeader"] [data-testid="stToolbar"]{display:flex!important;visibility:visible!important;background:transparent!important;pointer-events:auto!important}
 header[data-testid="stHeader"] [data-testid="stToolbar"] [data-testid="stToolbarActions"],
 header[data-testid="stHeader"] [data-testid="stToolbar"] a,
 header[data-testid="stHeader"] [data-testid="stToolbar"] button:not([data-testid="collapsedControl"]){display:none!important;visibility:hidden!important}
-/* Desktop: keep the sidebar permanently visible and remove both toggle controls. */
 @media(min-width:801px){
  header[data-testid="stHeader"] [data-testid="collapsedControl"],
  header[data-testid="stHeader"] button[data-testid="collapsedControl"],
@@ -79,17 +78,30 @@ div.stButton>button[kind="primary"] *, [data-testid="stFormSubmitButton"] button
 [data-testid="stDataFrame"] *{color:#1d2a3b}
 hr{border-color:#dbe4ef!important}
 @media(max-width:800px){
-.block-container{padding-left:.7rem;padding-right:.7rem}.brandbar{padding:12px;gap:10px;min-height:72px}.brandlogo{width:44px;height:44px}.brandtitle{font-size:1.08rem}.brandsub{font-size:.65rem}.brandmeta{display:none}
-/* Mobile only: show Streamlit's native << inside the drawer and >> reopen control. */
-header[data-testid="stHeader"] [data-testid="collapsedControl"],
-header[data-testid="stHeader"] button[data-testid="collapsedControl"],
-[data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
-[data-testid="stSidebar"] button[kind="header"]{
- display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;
- min-width:2.75rem!important;min-height:2.75rem!important;width:auto!important;height:auto!important;
- z-index:1100!important;position:relative!important
-}
-header[data-testid="stHeader"] [data-testid="collapsedControl"]{position:fixed!important;top:.35rem!important;left:.35rem!important;background:#fff!important;border:1px solid #cbd5e1!important;border-radius:9px!important;box-shadow:0 2px 8px rgba(0,0,0,.12)!important}
+ .block-container{padding-left:.7rem;padding-right:.7rem}.brandbar{padding:12px;gap:10px;min-height:72px}.brandlogo{width:44px;height:44px}.brandtitle{font-size:1.08rem}.brandsub{font-size:.65rem}.brandmeta{display:none}
+ /* Mobile: visible native reopen control while drawer is closed. */
+ header[data-testid="stHeader"] [data-testid="collapsedControl"],
+ header[data-testid="stHeader"] button[data-testid="collapsedControl"]{
+  display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;
+  position:fixed!important;top:4.2rem!important;left:.55rem!important;
+  width:2.8rem!important;min-width:2.8rem!important;height:2.8rem!important;min-height:2.8rem!important;
+  align-items:center!important;justify-content:center!important;background:#173b5c!important;color:#fff!important;
+  border:2px solid #fff!important;border-radius:10px!important;box-shadow:0 3px 12px rgba(0,0,0,.24)!important;z-index:2147483000!important
+ }
+ header[data-testid="stHeader"] [data-testid="collapsedControl"] svg,
+ header[data-testid="stHeader"] button[data-testid="collapsedControl"] svg{display:block!important;visibility:visible!important;opacity:1!important;fill:#fff!important;color:#fff!important;width:1.35rem!important;height:1.35rem!important}
+ /* Native close control remains visible inside the open drawer. */
+ [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"],
+ [data-testid="stSidebar"] button[kind="header"]{
+  display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;
+  position:sticky!important;top:.35rem!important;margin-left:auto!important;margin-right:.35rem!important;
+  width:2.8rem!important;min-width:2.8rem!important;height:2.8rem!important;min-height:2.8rem!important;
+  align-items:center!important;justify-content:center!important;background:#173b5c!important;color:#fff!important;
+  border:2px solid #fff!important;border-radius:10px!important;z-index:2147483000!important
+ }
+ [data-testid="stSidebar"] [data-testid="stSidebarCollapseButton"] svg,
+ [data-testid="stSidebar"] button[kind="header"] svg{display:block!important;visibility:visible!important;opacity:1!important;fill:#fff!important;color:#fff!important;width:1.35rem!important;height:1.35rem!important}
+ [data-testid="stSidebar"]{z-index:2147482000!important}
 }
 
 </style>
