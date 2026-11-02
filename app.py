@@ -1643,60 +1643,62 @@ if st.session_state.get("main_navigation") not in menu:
     st.session_state["main_navigation"] = current_page
 
 st.markdown("""<style>
-/* Compact premium horizontal navigation */
+/* Exclusive compact navigation: no heading, no radio dots, submenu stays directly below */
 div[class*="st-key-top_navigation"]{
-  background:linear-gradient(110deg,#123653 0%,#1c607b 100%);
+  background:linear-gradient(110deg,#123653 0%,#1b5875 100%);
   border:1px solid #214e6b;border-radius:12px;
-  padding:6px 10px!important;margin:2px 0 10px!important;
-  box-shadow:0 3px 12px rgba(17,49,74,.10);
-}
-div[class*="st-key-top_navigation"] [data-testid="stMarkdownContainer"] p{
-  color:#f5f9fc!important;font-size:12px!important;font-weight:700!important;
-  letter-spacing:.04em;margin:0 0 4px!important;
+  padding:8px 10px!important;margin:0 0 12px!important;
+  box-shadow:0 3px 12px rgba(17,49,74,.09);
 }
 div[class*="st-key-top_navigation"] [data-testid="stRadio"]{margin:0!important;padding:0!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] > label{display:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{
-  display:flex!important;flex-wrap:wrap!important;gap:6px!important;
+  display:flex!important;flex-wrap:wrap!important;gap:7px!important;
   align-items:center!important;margin:0!important;padding:0!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{
+  appearance:none!important;-webkit-appearance:none!important;
   display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  background:rgba(255,255,255,.97)!important;border:1px solid #d5e2eb!important;
-  border-radius:7px!important;padding:6px 11px!important;margin:0!important;
-  min-height:30px!important;color:#183750!important;font-weight:650!important;
-  line-height:1.15!important;box-shadow:none!important;cursor:pointer!important;
+  background:#fff!important;border:1px solid #d5e2eb!important;
+  border-radius:7px!important;padding:7px 13px!important;margin:0!important;
+  min-height:34px!important;min-width:0!important;color:#183750!important;
+  font-weight:650!important;line-height:1.15!important;box-shadow:none!important;
+  cursor:pointer!important;gap:0!important;
 }
-/* Remove the radio-circle icon so navigation looks like a dedicated menu */
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label > div:first-child,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label input,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label svg{display:none!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label:has(input:checked){
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] > div,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] input,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] svg,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] [data-testid="stRadioButton"]{display:none!important;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"]{
   background:#e8f2f7!important;border:1px solid #f0b7d7!important;
   color:#123653!important;box-shadow:inset 0 -2px 0 #c32682!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] label p{
-  color:inherit!important;font-size:12px!important;font-weight:650!important;
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] p{
+  color:inherit!important;font-size:13px!important;font-weight:650!important;
   margin:0!important;white-space:nowrap!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stColumn"]{padding:0!important;}
 div[class*="st-key-top_navigation"] [data-testid="stButton"]{margin:0!important;padding:0!important;}
 div[class*="st-key-top_navigation"] [data-testid="stButton"] button{
-  min-height:30px!important;padding:4px 12px!important;border-radius:7px!important;
+  min-height:34px!important;padding:5px 13px!important;border-radius:7px!important;
   border:1px solid #d5e2eb!important;background:#fff!important;color:#183750!important;
   font-size:12px!important;font-weight:650!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:3px!important;}
+div[class*="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:7px!important;}
 div[class*="st-key-top_navigation"] [data-testid="stHorizontalBlock"]{gap:8px!important;align-items:center!important;}
+div[class*="st-key-top_navigation"] [data-testid="stSelectbox"]{max-width:360px!important;margin-top:2px!important;}
+div[class*="st-key-top_navigation"] [data-testid="stSelectbox"] label{display:none!important;}
+div[class*="st-key-top_navigation"] [data-testid="stSelectbox"] [data-baseweb="select"]>div{
+  min-height:34px!important;border-radius:7px!important;border:1px solid #d4e0e9!important;
+  background:#fff!important;color:#173b5c!important;
+}
 @media(max-width:700px){
-  div[class*="st-key-top_navigation"]{padding:6px!important;margin:2px 0 8px!important;}
+  div[class*="st-key-top_navigation"]{padding:7px!important;margin:0 0 10px!important;}
   div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{gap:5px!important;}
-  div[class*="st-key-top_navigation"] [data-testid="stRadio"] label{padding:6px 9px!important;min-height:29px!important;}
+  div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{padding:6px 9px!important;min-height:31px!important;}
 }
 </style>""",unsafe_allow_html=True)
 
 with st.container(key="top_navigation"):
-    st.markdown("NAVIGATION", help="Choose a section")
     nav_col, logout_col = st.columns([10, 1], gap="small")
     with nav_col:
         page = st.radio(
@@ -1712,27 +1714,34 @@ with st.container(key="top_navigation"):
             st.session_state.pop("top_main_navigation", None)
             st.rerun()
 
-if page == "Pending to Dispatched":
-    if role_name == "staff":
-        dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+    # Contextual submenu is rendered immediately below the selected main menu.
+    if page == "Pending to Dispatched":
+        if role_name == "staff":
+            dispatch_options = ["Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        else:
+            dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
+        dispatch_choice = st.selectbox("Pending to Dispatched", dispatch_options, key="top_pending_dispatch_submenu")
+        util_choice = ""
+        dispatched_choice = ""
+    elif page == "Utilities":
+        util_options = ["Order History / Order List", "Cancelled Orders"]
+        if role_name in ("admin", "member"):
+            util_options.insert(0, "Agent Master")
+            util_options.insert(0, "Item Master")
+        if is_admin():
+            util_options.append("Admin Panel / Backup & Restore")
+        util_choice = st.selectbox("Utilities", util_options, key="top_utilities_submenu")
+        dispatch_choice = ""
+        dispatched_choice = ""
+    elif page == "Dispatched Details":
+        dispatched_options = ["Party Wise Dispatched History", "Agent Wise Dispatched History"]
+        dispatched_choice = st.selectbox("Dispatched Details", dispatched_options, key="top_dispatched_details_submenu")
+        util_choice = ""
+        dispatch_choice = ""
     else:
-        dispatch_options = ["Pending to Dispatch Order", "Party Wise Pending Report", "Agent Wise Pending Report", "SKU Wise Pending Report"]
-    dispatch_choice = st.selectbox("Pending to Dispatched", dispatch_options, key="top_pending_dispatch_submenu")
-elif page == "Utilities":
-    util_options = ["Order History / Order List", "Cancelled Orders"]
-    if role_name in ("admin", "member"):
-        util_options.insert(0, "Agent Master")
-        util_options.insert(0, "Item Master")
-    if is_admin():
-        util_options.append("Admin Panel / Backup & Restore")
-    util_choice = st.selectbox("Utilities", util_options, key="top_utilities_submenu")
-else:
-    util_choice = ""
-if page == "Dispatched Details":
-    dispatched_options = ["Party Wise Dispatched History", "Agent Wise Dispatched History"]
-    dispatched_choice = st.selectbox("Dispatched Details", dispatched_options, key="top_dispatched_details_submenu")
-else:
-    dispatched_choice = ""
+        util_choice = ""
+        dispatch_choice = ""
+        dispatched_choice = ""
 
 
 st.session_state["page"]=page
