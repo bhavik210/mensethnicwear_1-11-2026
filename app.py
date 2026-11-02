@@ -1643,66 +1643,79 @@ if st.session_state.get("main_navigation") not in menu:
     st.session_state["main_navigation"] = current_page
 
 st.markdown("""<style>
-/* Exclusive compact navigation: no heading, no radio dots, submenu stays directly below */
-div[class*="st-key-top_navigation"]{
-  background:linear-gradient(110deg,#123653 0%,#1b5875 100%);
-  border:1px solid #214e6b;border-radius:12px;
+/* SHUBHVASTRA navigation: force readable white labels and remove radio markers */
+div[data-testid="st-key-top_navigation"]{
+  background:linear-gradient(110deg,#123653 0%,#1b5875 100%)!important;
+  border:1px solid #214e6b!important;border-radius:12px!important;
   padding:7px 10px!important;margin:0 0 10px!important;
-  box-shadow:0 3px 12px rgba(17,49,74,.09);
+  box-shadow:0 3px 12px rgba(17,49,74,.09)!important;
 }
-/* Compact navigation: clear white labels on the dark bar, with no radio dots. */
-div[class*="st-key-top_navigation"] [data-testid="stRadio"]{margin:0!important;padding:0!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] > label{display:none!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"]{
+  margin:0!important;padding:0!important;
+}
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] > label{
+  display:none!important;
+}
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{
   display:flex!important;flex-wrap:wrap!important;gap:6px!important;
   align-items:center!important;margin:0!important;padding:0!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{
   appearance:none!important;-webkit-appearance:none!important;
   display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  background:rgba(255,255,255,.08)!important;border:1px solid rgba(255,255,255,.25)!important;
-  border-radius:7px!important;padding:7px 12px!important;margin:0!important;
-  min-height:33px!important;min-width:0!important;color:#fff!important;
-  font-weight:650!important;line-height:1.15!important;box-shadow:none!important;
-  cursor:pointer!important;gap:0!important;
+  background:rgba(255,255,255,.10)!important;
+  border:1px solid rgba(255,255,255,.35)!important;border-radius:7px!important;
+  padding:7px 12px!important;margin:0!important;min-height:34px!important;
+  min-width:0!important;box-shadow:none!important;cursor:pointer!important;
+  color:#fff!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]::before,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]::after{display:none!important;content:none!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] input,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] svg,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] [data-testid="stRadioButton"]{display:none!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] > div:first-child{display:none!important;}
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"]{
-  background:#c32682!important;border:1px solid #e15aa7!important;
-  color:#ffffff!important;box-shadow:inset 0 -2px 0 rgba(255,255,255,.35)!important;
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]::before,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]::after{
+  display:none!important;content:none!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"],
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] *,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] p,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] span,
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] label{
-  color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] input,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] svg,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [data-testid="stRadioButton"],
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] > div:first-child{
+  display:none!important;visibility:hidden!important;width:0!important;height:0!important;
+}
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"],
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] *,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] label,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] label *,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] p,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] span{
+  color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
   font-size:13px!important;font-weight:650!important;
   margin:0!important;white-space:nowrap!important;text-decoration:none!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stButton"]{margin:0!important;padding:0!important;}
-div[class*="st-key-top_navigation"] [data-testid="stButton"] button{
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"]{
+  background:#c32682!important;border:1px solid #f08ac3!important;
+  color:#ffffff!important;
+}
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"] *,
+div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"] span{
+  color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;
+}
+div[data-testid="st-key-top_navigation"] [data-testid="stButton"]{margin:0!important;padding:0!important;}
+div[data-testid="st-key-top_navigation"] [data-testid="stButton"] button{
   min-height:34px!important;padding:5px 13px!important;border-radius:7px!important;
   border:1px solid #d5e2eb!important;background:#fff!important;color:#183750!important;
   font-size:12px!important;font-weight:650!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:5px!important;}
-div[class*="st-key-top_navigation"] [data-testid="stHorizontalBlock"]{gap:6px!important;align-items:center!important;}
-div[class*="st-key-top_navigation"] [data-testid="stSelectbox"]{max-width:360px!important;margin-top:2px!important;}
-div[class*="st-key-top_navigation"] [data-testid="stSelectbox"] label{display:none!important;}
-div[class*="st-key-top_navigation"] [data-testid="stSelectbox"] [data-baseweb="select"]>div{
+div[data-testid="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:5px!important;}
+div[data-testid="st-key-top_navigation"] [data-testid="stHorizontalBlock"]{gap:6px!important;align-items:center!important;}
+div[data-testid="st-key-top_navigation"] [data-testid="stSelectbox"]{max-width:360px!important;margin-top:2px!important;}
+div[data-testid="st-key-top_navigation"] [data-testid="stSelectbox"] label{display:none!important;}
+div[data-testid="st-key-top_navigation"] [data-testid="stSelectbox"] [data-baseweb="select"]>div{
   min-height:34px!important;border-radius:7px!important;border:1px solid #d4e0e9!important;
   background:#fff!important;color:#173b5c!important;
 }
 @media(max-width:700px){
-  div[class*="st-key-top_navigation"]{padding:7px!important;margin:0 0 10px!important;}
-  div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{gap:5px!important;}
-  div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{padding:6px 9px!important;min-height:31px!important;}
+  div[data-testid="st-key-top_navigation"]{padding:7px!important;margin:0 0 10px!important;}
+  div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{gap:5px!important;}
+  div[data-testid="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{padding:6px 9px!important;min-height:32px!important;}
 }
 </style>""",unsafe_allow_html=True)
 
