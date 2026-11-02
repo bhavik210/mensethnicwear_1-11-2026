@@ -1154,21 +1154,26 @@ def page_dispatch(view='dispatch'):
            ORDER BY o.order_no DESC,i.sr_no,s.size_code""",{'pid':int(pid)})
         df['Pending Qty']=(df['Order Qty'].astype(int)-df['dispatched'].astype(int)-df['cancelled_qty'].astype(int)).clip(lower=0)
         df=df[df['Pending Qty']>0]
-        # Responsive piece cards: clear order details and large touch controls on phones.
+        # Responsive table on desktop and labelled, touch-friendly fields on mobile.
         st.markdown("""<style>
-        div[class*="st-key-dispatch_piece_row_"]{border:1px solid #d6e0ea!important;border-radius:10px!important;background:#fff!important;padding:10px!important;margin:0 0 9px!important;}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"]{gap:.45rem!important;}
+        .dispatch-table-head{display:grid;grid-template-columns:1.0fr 1.05fr 1.0fr .62fr .85fr .8fr 1.55fr .72fr;gap:8px;padding:9px 10px;background:#173b5c;color:#fff;border-radius:8px 8px 0 0;font-weight:700;font-size:13px;}
+        div[class*="st-key-dispatch_piece_row_"]{border:1px solid #d4deea!important;border-radius:0!important;background:#fff!important;padding:9px 10px!important;margin:0!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stVerticalBlock"]{gap:.35rem!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stHorizontalBlock"]{gap:8px!important;align-items:center!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="column"]{min-width:0!important;}
+        div[class*="st-key-dispatch_piece_row_"] [data-testid="stMarkdownContainer"] p{margin:0!important;color:#172b43!important;font-size:13px!important;}
         div[class*="st-key-dispatch_piece_row_"] [data-testid="stWidgetLabel"] label{font-size:12px!important;font-weight:650!important;color:#29445f!important;}
-        div[class*="st-key-dispatch_piece_row_"] [data-testid="stMarkdownContainer"] p{margin:0!important;color:#172b43!important;}
-        div[class*="st-key-dispatch_piece_row_"] input{min-height:40px!important;color:#172b43!important;}
+        div[class*="st-key-dispatch_piece_row_"] input{min-height:38px!important;color:#172b43!important;}
         @media(max-width:700px){
-          div[class*="st-key-dispatch_piece_row_"]{padding:9px!important;}
-          div[class*="st-key-dispatch_piece_row_"] [data-testid="stHorizontalBlock"]{gap:6px!important;flex-wrap:wrap!important;}
-          div[class*="st-key-dispatch_piece_row_"] [data-testid="column"]{min-width:calc(50% - 6px)!important;flex:1 1 calc(50% - 6px)!important;}
-          div[class*="st-key-dispatch_piece_row_"] [data-testid="stCheckbox"] label{font-size:14px!important;min-height:40px!important;}
+          .dispatch-table-head{display:none!important;}
+          div[class*="st-key-dispatch_piece_row_"]{border-radius:10px!important;margin:0 0 10px!important;padding:10px!important;}
+          div[class*="st-key-dispatch_piece_row_"] [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important;gap:7px!important;}
+          div[class*="st-key-dispatch_piece_row_"] [data-testid="column"]{flex:1 1 calc(50% - 7px)!important;min-width:calc(50% - 7px)!important;width:calc(50% - 7px)!important;}
+          div[class*="st-key-dispatch_piece_row_"] [data-testid="stCheckbox"] label{min-height:42px!important;font-size:14px!important;}
           div[class*="st-key-dispatch_piece_row_"] input{font-size:14px!important;}
         }
         </style>""",unsafe_allow_html=True)
+        st.markdown('<div class="dispatch-table-head"><div>Order No.</div><div>Order Date</div><div>SKU Code</div><div>Size</div><div>Dispatch</div><div>Order Qty</div><div>Details</div><div>Cancel</div></div>',unsafe_allow_html=True)
         selected=[]
         for _,r in df.iterrows():
             size_id=int(r['size_id']); pending=int(r['Pending Qty'])
@@ -1178,22 +1183,21 @@ def page_dispatch(view='dispatch'):
                 dispatch_checked=bool(st.session_state.get(dispatch_key,False))
                 cancel_checked=bool(st.session_state.get(cancel_key,False))
                 with st.container(key=f'dispatch_piece_row_{token}',border=False):
-                    st.markdown(f"**Order No. {r['Order No.']}**  ·  **Date:** {pd.to_datetime(r['Order Date']).strftime('%d-%m-%Y')}")
-                    meta=st.columns(2)
-                    meta[0].markdown(f"**SKU Code**  \\n{r['SKU Code']}")
-                    meta[1].markdown(f"**Size**  \\n{r['Size']}")
-                    actions=st.columns(3)
+                    cells=st.columns([1.0,1.05,1.0,.62,.85,.8,1.55,.72])
+                    cells[0].markdown(f'**Order No.**  \n{r["Order No."]}')
+                    cells[1].markdown(f'**Order Date**  \n{pd.to_datetime(r["Order Date"]).strftime("%d-%m-%Y")}')
+                    cells[2].markdown(f'**SKU Code**  \n{r["SKU Code"]}')
+                    cells[3].markdown(f'**Size**  \n{r["Size"]}')
                     if not cancel_checked:
-                        dispatch_checked=actions[0].checkbox('Dispatch',key=dispatch_key)
+                        dispatch_checked=cells[4].checkbox('Dispatch',key=dispatch_key)
                     else:
-                        actions[0].markdown("**Dispatch**  \\n—")
-                    actions[1].markdown(f"**Order Qty**  \\n{int(r['Order Qty'])} Pcs")
-                    actions[2].markdown("**Qty**  \\n1 Pcs")
-                    details=st.text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}')
+                        cells[4].markdown('**Dispatch**  \n—')
+                    cells[5].markdown(f'**Order Qty**  \n{int(r["Order Qty"])} Pcs')
+                    details=cells[6].text_input('Details',value=str(r['Details'] or ''),key=f'piece_details_{token}')
                     if not dispatch_checked:
-                        cancel_checked=st.checkbox('Cancel',key=cancel_key)
+                        cancel_checked=cells[7].checkbox('Cancel',key=cancel_key)
                     else:
-                        st.markdown("**Cancel**  \\n—")
+                        cells[7].markdown('**Cancel**  \n—')
                     if dispatch_checked or cancel_checked:
                         selected.append((size_id,str(r['Size']),details,'dispatch' if dispatch_checked else 'cancel',token))
         if st.button('Save to Dispatched',type='primary',use_container_width=True,key='save_to_dispatched'):
