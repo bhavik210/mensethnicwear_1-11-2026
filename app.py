@@ -41,7 +41,7 @@ header[data-testid="stHeader"] [data-testid="stToolbar"] button:not([data-testid
 [data-testid="stVerticalBlock"]>div:has(>.brandbar){margin-bottom:.8rem}
 /* Navigation is rendered as a horizontal row below the brand header on desktop and mobile. */
 [data-testid="stSidebar"]{display:none!important;visibility:hidden!important;width:0!important;min-width:0!important;max-width:0!important}
-.brandbar{background:linear-gradient(115deg,#102844 0%,#174b70 58%,#1c6680 100%);color:#fff;border:1px solid #244d6c;border-radius:15px;padding:17px 22px;display:flex;align-items:center;gap:16px;margin:0 0 1.25rem;box-shadow:0 8px 24px rgba(16,40,68,.13);min-height:88px}
+.brandbar{background:linear-gradient(115deg,#102844 0%,#174b70 58%,#1c6680 100%);color:#fff;border:1px solid #244d6c;border-radius:15px;padding:17px 22px;display:flex;align-items:center;gap:16px;margin:0 0 .45rem;box-shadow:0 8px 24px rgba(16,40,68,.13);min-height:88px}
 .brandlogo{width:58px;height:58px;object-fit:contain;background:#fff;border-radius:11px;padding:5px;flex:0 0 auto}
 .brandcopy{display:flex;flex-direction:column;gap:4px;min-width:0}.brandtitle{font-weight:850;font-size:1.5rem;letter-spacing:1.1px;line-height:1.15;color:#fff!important}.brandsub{color:#d7e7f2;font-size:.78rem;letter-spacing:.65px;font-weight:600}.brandmeta{margin-left:auto;color:#e3edf5;font-size:.78rem;border:1px solid #6b91a9;border-radius:999px;padding:7px 12px;white-space:nowrap}
 .metric-card{background:white;border:1px solid #dfe6ef;border-radius:12px;padding:16px 18px;box-shadow:0 3px 12px #20344c07}
@@ -1647,33 +1647,37 @@ st.markdown("""<style>
 div[class*="st-key-top_navigation"]{
   background:linear-gradient(110deg,#123653 0%,#1b5875 100%);
   border:1px solid #214e6b;border-radius:12px;
-  padding:8px 10px!important;margin:0 0 12px!important;
+  padding:7px 10px!important;margin:0 0 10px!important;
   box-shadow:0 3px 12px rgba(17,49,74,.09);
 }
+/* Compact navigation: clear white labels on the dark bar, with no radio dots. */
 div[class*="st-key-top_navigation"] [data-testid="stRadio"]{margin:0!important;padding:0!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] > label{display:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radiogroup"]{
-  display:flex!important;flex-wrap:wrap!important;gap:7px!important;
+  display:flex!important;flex-wrap:wrap!important;gap:6px!important;
   align-items:center!important;margin:0!important;padding:0!important;
 }
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]{
   appearance:none!important;-webkit-appearance:none!important;
   display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  background:#fff!important;border:1px solid #d5e2eb!important;
-  border-radius:7px!important;padding:7px 13px!important;margin:0!important;
-  min-height:34px!important;min-width:0!important;color:#183750!important;
+  background:rgba(255,255,255,.08)!important;border:1px solid rgba(255,255,255,.25)!important;
+  border-radius:7px!important;padding:7px 12px!important;margin:0!important;
+  min-height:33px!important;min-width:0!important;color:#fff!important;
   font-weight:650!important;line-height:1.15!important;box-shadow:none!important;
   cursor:pointer!important;gap:0!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] > div,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]::before,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"]::after{display:none!important;content:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] input,
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] svg,
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] [data-testid="stRadioButton"]{display:none!important;}
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] > div:first-child{display:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"][aria-checked="true"]{
-  background:#e8f2f7!important;border:1px solid #f0b7d7!important;
+  background:#ffffff!important;border:1px solid #ffffff!important;
   color:#123653!important;box-shadow:inset 0 -2px 0 #c32682!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] p{
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] p,
+div[class*="st-key-top_navigation"] [data-testid="stRadio"] [role="radio"] span{
   color:inherit!important;font-size:13px!important;font-weight:650!important;
   margin:0!important;white-space:nowrap!important;
 }
@@ -1683,8 +1687,8 @@ div[class*="st-key-top_navigation"] [data-testid="stButton"] button{
   border:1px solid #d5e2eb!important;background:#fff!important;color:#183750!important;
   font-size:12px!important;font-weight:650!important;
 }
-div[class*="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:7px!important;}
-div[class*="st-key-top_navigation"] [data-testid="stHorizontalBlock"]{gap:8px!important;align-items:center!important;}
+div[class*="st-key-top_navigation"] [data-testid="stVerticalBlock"]{gap:5px!important;}
+div[class*="st-key-top_navigation"] [data-testid="stHorizontalBlock"]{gap:6px!important;align-items:center!important;}
 div[class*="st-key-top_navigation"] [data-testid="stSelectbox"]{max-width:360px!important;margin-top:2px!important;}
 div[class*="st-key-top_navigation"] [data-testid="stSelectbox"] label{display:none!important;}
 div[class*="st-key-top_navigation"] [data-testid="stSelectbox"] [data-baseweb="select"]>div{
