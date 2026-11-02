@@ -847,8 +847,13 @@ def page_order_form(edit_id=None):
             else:
                 st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
             item_cols[6].text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True)
+            # Recalculate the row total from all four size inputs on every rerun.
+            # Assign the widget state before creating the disabled text field so
+            # Streamlit does not keep displaying a stale initial value (often 0).
             qty=sum(int(v or 0) for v in sizes.values())
-            item_cols[7].text_input("QTY",value=f"{qty} Pcs",disabled=True,key=f"ord_total_qty_{ix}")
+            total_qty_key=f"ord_total_qty_{ix}"
+            st.session_state[total_qty_key]=f"{qty} Pcs"
+            item_cols[7].text_input("QTY",disabled=True,key=total_qty_key)
             rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
             if ix==row_count-1 and (sku or qty>0): last_filled=True
 
