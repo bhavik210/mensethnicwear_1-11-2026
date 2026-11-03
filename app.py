@@ -781,7 +781,30 @@ def page_order_form(edit_id=None):
         info[2].text_input("State",str(party.state),disabled=True,key=f"ord_state_{edit_id or 'new'}")
         info[3].text_input("Agent",str(party.agent_name),disabled=True,key=f"ord_agent_{edit_id or 'new'}")
     st.subheader("Item Details")
-    sku_options=[""]+skus.sku_number.tolist()
+    # Keep the SKU dropdown available in New Order and allow authorized users
+    # to add a missing SKU without leaving this screen.
+    if str(current_user().get("role", "staff")).lower() in ("admin", "member"):
+        with st.expander("＋ Add New SKU (without leaving New Order)", expanded=False):
+            with st.form("new_order_inline_sku_add", clear_on_submit=True):
+                add_cols = st.columns(3)
+                inline_sku = add_cols[0].text_input("SKU Name *", placeholder="Enter SKU name")
+                inline_under = add_cols[1].text_input("SKU Under *", placeholder="Enter SKU category / group")
+                inline_rate = add_cols[2].number_input("Sale Rate *", min_value=0.0, step=1.0, format="%.2f", key="new_order_inline_sku_rate")
+                if st.form_submit_button("Save New SKU", type="primary"):
+                    if not inline_sku.strip():
+                        st.error("SKU Name જરૂરી છે.")
+                    elif not inline_under.strip():
+                        st.error("SKU Under જરૂરી છે.")
+                    elif one("SELECT id FROM sku_master WHERE LOWER(sku_number)=LOWER(:s)", {"s": inline_sku.strip()}):
+                        st.error("આ SKU Name પહેલેથી છે.")
+                    else:
+                        run("INSERT INTO sku_master(sku_number,sku_under,sale_rate) VALUES(:s,:u,:r)", {"s": inline_sku.strip(), "u": inline_under.strip(), "r": inline_rate})
+                        st.success("નવો SKU save થયો. હવે SKU dropdown માંથી પસંદ કરી શકશો.")
+                        st.rerun()
+    # Refresh the master list on each rerun so newly added SKUs immediately
+    # appear in every item row dropdown.
+    skus = get_skus()
+    sku_options=[""]+skus.sku_number.astype(str).tolist()
     rows=[]
     # Desktop: one compact horizontal row per item. Mobile: responsive wrapped fields.
     st.markdown("""<style>
@@ -812,9 +835,10 @@ def page_order_form(edit_id=None):
             opts=sku_options.copy()
             if cur and cur not in opts: opts.insert(1,cur)
             item_cols=st.columns([2.0,.68,.68,.68,.68,.95,1.05,.85])
-            # Text entry accepts a SKU code directly; Streamlit reruns as the
-            # field changes, so pressing Tab after typing is enough to resolve it.
-            sku=item_cols[0].text_input("SKU Code / Particulars",key=skey,placeholder="Enter SKU code")
+            # Restore the original searchable dropdown. Users can select an
+            # existing SKU, or add a missing one using the inline form above.
+            selected_index = opts.index(cur) if cur in opts else 0
+            sku=item_cols[0].selectbox("SKU Code / Particulars", options=opts, index=selected_index, format_func=lambda v: "Choose SKU Code" if v == "" else str(v), key=skey)
             sku_match=skus.loc[skus.sku_number.astype(str).str.strip().str.casefold()==str(sku).strip().casefold()] if not skus.empty and str(sku).strip() else pd.DataFrame()
             sku_rate=float(sku_match.iloc[0]["sale_rate"]) if not sku_match.empty else 0.0
             visible_rate_key=f"ord_rate_visible_{ix}_{edit_id or 'new'}"
