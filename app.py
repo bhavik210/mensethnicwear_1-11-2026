@@ -362,9 +362,9 @@ def order_pdf_bytes(order, items_df):
         size=str(r.get("Size","")).upper()
         if size in grouped[key]: grouped[key][size]+=int(r.get("Qty",0) or 0)
     for (sr,sku,disc,rate),sizes in grouped.items():
-        qty=sum(sizes.values()); amount=max(0,float(rate or 0)-float(disc or 0))*qty
+        qty=sum(sizes.values()); amount=max(0,float(rate or 0)*(1-float(disc or 0)/100))*qty
         total_qty+=qty; total_amount+=amount
-        data.append([str(sr),str(sku),str(sizes["M"]),str(sizes["L"]),str(sizes["XL"]),str(sizes["XXL"]),str(disc),f"{float(rate or 0):,.2f}",str(qty),f"{amount:,.2f}"])
+        data.append([str(sr),str(sku),str(sizes["M"]),str(sizes["L"]),str(sizes["XL"]),str(sizes["XXL"]),f"{float(disc or 0):g}%",f"{float(rate or 0):,.2f}",str(qty),f"{amount:,.2f}"])
     data.append(["","TOTAL","","","","","","",str(total_qty),f"{total_amount:,.2f}"])
     tab=Table(data,repeatRows=1,colWidths=[9*mm,43*mm,11*mm,11*mm,12*mm,13*mm,17*mm,19*mm,13*mm,23*mm])
     tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#F7F4EA")),("TEXTCOLOR",(0,0),(-1,0),colors.black),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),7.5),("GRID",(0,0),(-1,-1),0.45,colors.HexColor("#9aa8b8")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(2,1),(-1,-1),"RIGHT"),("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#eaf3fb")),("FONTNAME",(0,-1),(-1,-1),"Helvetica-Bold"),("LEFTPADDING",(0,0),(-1,-1),3),("RIGHTPADDING",(0,0),(-1,-1),3),("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4)]))
@@ -505,7 +505,7 @@ def page_agent_portal(view="dashboard"):
         for size in SIZES:
             if size not in pivot.columns: pivot[size] = 0
         pivot["Qty"] = pivot[SIZES].sum(axis=1)
-        pivot["Amount"] = pivot["Qty"] * pivot["Rate"] - pivot["Discount"]
+        pivot["Amount"] = (pivot["Qty"] * pivot["Rate"] * (1 - pivot["Discount"] / 100)).clip(lower=0)
         df = pivot[["Order No.", "Order Date", "Party Name", "SKU Code", "M", "L", "XL", "XXL", "Qty", "Discount", "Amount"]].copy()
         for c in ["M", "L", "XL", "XXL", "Qty"]: df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
         for c in ["Discount", "Amount"]: df[c] = df[c].map(lambda x: f"₹{float(x or 0):,.2f}")
@@ -812,8 +812,11 @@ def page_order_form(edit_id=None):
             opts=sku_options.copy()
             if cur and cur not in opts: opts.insert(1,cur)
             item_cols=st.columns([2.0,.68,.68,.68,.68,.95,1.05,.85])
-            sku=item_cols[0].selectbox("SKU Code / Particulars",opts,index=opts.index(cur) if cur in opts else 0,key=skey)
-            sku_rate=float(skus.loc[skus.sku_number==sku,"sale_rate"].iloc[0]) if not skus.empty and sku in skus.sku_number.tolist() else 0.0
+            # Text entry accepts a SKU code directly; Streamlit reruns as the
+            # field changes, so pressing Tab after typing is enough to resolve it.
+            sku=item_cols[0].text_input("SKU Code / Particulars",key=skey,placeholder="Enter SKU code")
+            sku_match=skus.loc[skus.sku_number.astype(str).str.strip().str.casefold()==str(sku).strip().casefold()] if not skus.empty and str(sku).strip() else pd.DataFrame()
+            sku_rate=float(sku_match.iloc[0]["sale_rate"]) if not sku_match.empty else 0.0
             visible_rate_key=f"ord_rate_visible_{ix}_{edit_id or 'new'}"
             if sku != previous_sku:
                 st.session_state[visible_rate_key]=f"{sku_rate:.2f}"
@@ -835,18 +838,20 @@ def page_order_form(edit_id=None):
             disc_key=f"ord_disc_{ix}"
             if disc_key not in st.session_state: st.session_state[disc_key]=f"{float(old.discount) if old is not None else 0.0:.2f}"
             else: st.session_state[disc_key]=str(st.session_state[disc_key])
-            disc_text_value=item_cols[5].text_input("Discount",key=disc_key,disabled=bool(edit_id),placeholder="0.00")
+            disc_text_value=item_cols[5].text_input("Discount (%)",key=disc_key,disabled=bool(edit_id),placeholder="0")
             try:
-                disc=float(str(disc_text_value or "0").replace(",", "").strip() or 0)
-                if disc<0: raise ValueError
+                disc=float(str(disc_text_value or "0").replace(",", "").replace("%", "").strip() or 0)
+                if disc<0 or disc>100: raise ValueError
             except ValueError:
-                st.error(f"Row {ix+1}: Discount માં માન્ય શૂન્ય અથવા positive rate લખો.")
+                st.error(f"Row {ix+1}: Discount 0 થી 100 વચ્ચે દાખલ કરો.")
                 disc=0.0
             if visible_rate_key not in st.session_state:
                 st.session_state[visible_rate_key]=f"{float(rate):.2f}"
             else:
                 st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
             item_cols[6].text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True)
+            if sku and sku_match.empty:
+                item_cols[0].caption("આ SKU Code Item Master માં મળ્યો નથી.")
             # Recalculate the row total from all four size inputs on every rerun.
             # Assign the widget state before creating the disabled text field so
             # Streamlit does not keep displaying a stale initial value (often 0).
@@ -854,12 +859,20 @@ def page_order_form(edit_id=None):
             total_qty_key=f"ord_total_qty_{ix}"
             st.session_state[total_qty_key]=f"{qty} Pcs"
             item_cols[7].text_input("QTY",disabled=True,key=total_qty_key)
-            rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes})
+            row_amount=max(0.0,float(rate or 0)*(1-float(disc or 0)/100))*qty
+            rows.append({"sku":sku,"rate":rate,"discount":disc,"sizes":sizes,"qty":qty,"amount":row_amount})
             if ix==row_count-1 and (sku or qty>0): last_filled=True
 
     if last_filled and row_count<999:
         st.session_state["new_order_row_count"]=row_count+1
         st.rerun()
+    # Live order totals: size quantities summed per row and amount after percentage discount.
+    order_total_qty=sum(int(r.get("qty",0) or 0) for r in rows)
+    order_total_amount=sum(float(r.get("amount",0) or 0) for r in rows)
+    total_cards=st.columns(2)
+    total_cards[0].metric("Total Qty", f"{order_total_qty} Pcs")
+    total_cards[1].metric("Total Amount", f"₹{order_total_amount:,.2f}")
+
     packaging_options=["Chain Bag","Box Packing","Sherwani Bag Packaging"]
     old_pack=[]
     if existing:
@@ -899,6 +912,8 @@ def page_order_form(edit_id=None):
             cleaned=[]
             for r in rows:
                 if not str(r["sku"]).strip(): continue
+                if str(r["sku"]).strip().casefold() not in {str(v).strip().casefold() for v in skus.sku_number.tolist()}:
+                    raise ValueError(f"{r['sku']}: આ SKU Code Item Master માં મળ્યો નથી. સાચો SKU Code દાખલ કરો.")
                 if sum(int(x or 0) for x in r["sizes"].values())<=0: raise ValueError(f"{r['sku']}: ઓછામાં ઓછી એક size quantity આપો.")
                 cleaned.append(r)
             if not cleaned: raise ValueError("ઓછામાં ઓછો એક item ઉમેરો.")
@@ -949,7 +964,7 @@ def page_orders():
     # Streamlit reruns on each text change, so the results filter immediately without Enter.
     df=q("""SELECT o.id AS ID,o.order_no AS "Order Number",o.order_date AS "Order Date",
              p.party_name AS "Party Name",COALESCE(SUM(s.ordered_qty),0) AS Qty,
-             COALESCE(SUM(s.ordered_qty * i.piece_rate),0) AS Amount,
+             COALESCE(SUM(s.ordered_qty * i.piece_rate * (1-COALESCE(i.discount,0)/100.0)),0) AS Amount,
              COALESCE(a.agent_name,'') AS "Agent Name",o.cancelled AS Cancelled
              FROM orders o JOIN parties p ON p.id=o.party_id LEFT JOIN agents a ON a.id=p.agent_id
              LEFT JOIN order_items i ON i.order_id=o.id LEFT JOIN order_item_sizes s ON s.order_item_id=i.id
