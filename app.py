@@ -1511,16 +1511,37 @@ def page_users():
                 st.rerun()
 
 
-BACKUP_TABLES = ["agents", "parties", "sku_master", "orders", "order_items", "order_item_sizes", "order_dispatches", "users"]
-BACKUP_FORMAT_VERSION = 1
+# Keep parent tables before child tables. Every business table is included, including
+# cancellations and user access credentials (password hashes, never plaintext).
+BACKUP_TABLE_ORDER = [
+    "agents", "parties", "sku_master", "users", "orders",
+    "order_items", "order_item_sizes", "order_dispatches",
+    "order_size_cancellations",
+]
+BACKUP_FORMAT_VERSION = 2
+
+def backup_table_names():
+    """Return all application tables known to this release, in FK-safe order."""
+    available = set(inspect(engine).get_table_names())
+    ordered = [name for name in BACKUP_TABLE_ORDER if name in available]
+    # Include future application tables automatically, while excluding database
+    # bookkeeping tables that are not part of Shubhvastra business data.
+    extras = sorted(name for name in available
+                    if name not in ordered and name not in {"alembic_version", "sqlite_sequence"}
+                    and not name.startswith("pg_") )
+    return ordered + extras
+
+BACKUP_TABLES = backup_table_names()
 
 
 def make_full_backup():
     """Create a portable, app-level backup containing every application table."""
+    table_names = backup_table_names()
     payload = {"format": "shubhvastra_backup", "version": BACKUP_FORMAT_VERSION,
                "created_at": datetime.now().isoformat(timespec="seconds"),
-               "source_database": engine.dialect.name, "tables": {}}
-    for table_name in BACKUP_TABLES:
+               "source_database": engine.dialect.name,
+               "included_tables": table_names, "tables": {}}
+    for table_name in table_names:
         payload["tables"][table_name] = q(f'SELECT * FROM "{table_name}"').to_dict(orient="records")
     raw = json.dumps(payload, ensure_ascii=False, default=str, indent=2).encode("utf-8")
     mem = io.BytesIO()
@@ -1533,13 +1554,21 @@ def make_full_backup():
 
 def _apply_backup_payload(payload):
     """Validate and restore a payload into the configured database."""
-    if payload.get("format") != "shubhvastra_backup" or payload.get("version") != BACKUP_FORMAT_VERSION:
+    if payload.get("format") != "shubhvastra_backup" or payload.get("version") not in (1, BACKUP_FORMAT_VERSION):
         raise ValueError("Backup format/version ઓળખી શકાયું નથી.")
     tables = payload.get("tables", {})
-    if any(name not in tables or not isinstance(tables[name], list) for name in BACKUP_TABLES):
-        raise ValueError("Backup માં જરૂરી tables ખૂટે છે અથવા data format ખોટો છે.")
+    target_tables = backup_table_names()
+    required = [name for name in target_tables if name in BACKUP_TABLE_ORDER]
+    if any(name not in tables or not isinstance(tables[name], list) for name in required):
+        raise ValueError("Backup માં જરૂરી business tables ખૂટે છે અથવા data format ખોટો છે.")
+    # Optional tables absent from an older backup are restored as empty only when
+    # they are new to the app; existing backup contents are never silently ignored.
+    for name in target_tables:
+        tables.setdefault(name, [])
+        if not isinstance(tables[name], list):
+            raise ValueError(f"{name} table નો backup data format ખોટો છે.")
     inspector = inspect(engine)
-    for table_name in BACKUP_TABLES:
+    for table_name in target_tables:
         if not inspector.has_table(table_name):
             raise ValueError(f"Database માં {table_name} table મળ્યું નથી. App ને પહેલાં reboot કરો.")
         allowed = {col["name"] for col in inspector.get_columns(table_name)}
@@ -1548,9 +1577,9 @@ def _apply_backup_payload(payload):
                 raise ValueError(f"{table_name} table ના columns હાલના app સાથે મેળ ખાતા નથી. જૂના database માટે migration જરૂરી હોઈ શકે છે.")
     # Delete children first to satisfy foreign keys, then restore parents first.
     with engine.begin() as conn:
-        for table_name in reversed(BACKUP_TABLES):
+        for table_name in reversed(target_tables):
             conn.execute(text(f'DELETE FROM "{table_name}"'))
-        for table_name in BACKUP_TABLES:
+        for table_name in target_tables:
             rows = tables[table_name]
             if not rows:
                 continue
@@ -1563,9 +1592,10 @@ def _apply_backup_payload(payload):
             for row in rows:
                 conn.execute(stmt, {f'v{i}': row.get(col) for i, col in enumerate(columns)})
         if engine.dialect.name == "postgresql":
-            for table_name in BACKUP_TABLES:
-                conn.execute(text(f"SELECT setval(pg_get_serial_sequence(:tbl, 'id'), COALESCE((SELECT MAX(id) FROM \"{table_name}\"), 1), (SELECT MAX(id) IS NOT NULL FROM \"{table_name}\"))"), {"tbl": table_name})
-    return {name: len(tables[name]) for name in BACKUP_TABLES}
+            for table_name in target_tables:
+                if "id" in {col["name"] for col in inspector.get_columns(table_name)}:
+                    conn.execute(text(f"SELECT setval(pg_get_serial_sequence(:tbl, 'id'), COALESCE((SELECT MAX(id) FROM \"{table_name}\"), 1), (SELECT MAX(id) IS NOT NULL FROM \"{table_name}\"))"), {"tbl": table_name})
+    return {name: len(tables[name]) for name in target_tables}
 
 
 def restore_full_backup(uploaded_bytes, filename="backup.zip"):
@@ -1576,11 +1606,15 @@ def restore_full_backup(uploaded_bytes, filename="backup.zip"):
         try:
             source.deserialize(uploaded_bytes)
             available = {row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            missing = [name for name in BACKUP_TABLES if name not in available]
+            required = [name for name in backup_table_names() if name in BACKUP_TABLE_ORDER]
+            missing = [name for name in required if name not in available]
             if missing:
                 raise ValueError("આ database માં Shubhvastra ના જરૂરી tables નથી: " + ", ".join(missing) + ". જો આ જૂની party_reporting.db છે તો પહેલા migration format માં convert કરવી પડશે.")
             payload = {"format": "shubhvastra_backup", "version": BACKUP_FORMAT_VERSION, "tables": {}}
-            for name in BACKUP_TABLES:
+            for name in backup_table_names():
+                if name not in available:
+                    payload["tables"][name] = []
+                    continue
                 cursor = source.execute(f'SELECT * FROM "{name}"')
                 columns = [item[0] for item in cursor.description]
                 payload["tables"][name] = [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -1602,7 +1636,7 @@ def make_sqlite_database_backup():
     import sqlite3
     db = sqlite3.connect(":memory:")
     try:
-        for table_name in BACKUP_TABLES:
+        for table_name in backup_table_names():
             frame = q(f'SELECT * FROM "{table_name}"')
             frame.to_sql(table_name, db, if_exists="replace", index=False)
         db.commit()
@@ -1664,7 +1698,8 @@ def page_backup_restore():
         st.warning("Local SQLite mode છે. Streamlit Cloud પર permanent/shared data માટે managed PostgreSQL અને DATABASE_URL configure કરવું જરૂરી છે.")
     st.divider()
     st.subheader("1. Full Backup Download")
-    st.write("Party, Agent, SKU, Orders, order items, dispatch history અને app users સહિત તમામ tables નો backup.")
+    st.write("Full Backup ZIP માં Party ના બધા details, Agent, Item Master / SKU, તમામ Orders અને Order History, order items અને sizes, Pending તથા Dispatched records, Dispatch History, Cancelled quantities, અને Admin Panel ના User Name, Role, Agent Mapping, Active Status તથા Password Login Hash સામેલ છે.")
+    st.info("Restore કર્યા પછી જૂના backup માં જે user accounts, roles અને login credentials હતા તે જ પાછા આવશે. Password સુરક્ષિત hash સ્વરૂપે સાચવાય છે; ZIP માં plaintext password રાખવામાં આવતો નથી, પરંતુ restore પછી એ જ password થી login થઈ શકશે.")
     try:
         backup_bytes = make_full_backup()
         st.download_button("⬇️ Download Full Backup ZIP", backup_bytes,
@@ -1688,7 +1723,7 @@ def page_backup_restore():
             st.rerun()
         except Exception as e:
             st.error(f"Restore નિષ્ફળ ગયું: {e}")
-    st.caption("નોંધ: Shubhvastra backup ZIP અથવા આ app માંથી download કરેલી compatible .db/.sqlite/.sqlite3 ફાઇલ upload કરો. .rar અને CSV સીધા restore થતા નથી. જૂના/અલગ schema વાળા database માટે migration જરૂરી હોઈ શકે છે.")
+    st.caption("નોંધ: ZIP Full Backup માં app ના તમામ business tables અને user access data સામેલ છે. એ જ અથવા compatible Shubhvastra app માં Restore કરો. Restore હાલના records ને backup ના records થી બદલે છે. .rar અને CSV support થતા નથી; જૂના/અલગ schema વાળા database માટે migration જરૂરી હોઈ શકે છે.")
 
 
 # Apply navigation requests before creating the sidebar widget, so buttons can switch pages reliably.
