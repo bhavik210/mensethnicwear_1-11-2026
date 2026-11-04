@@ -1161,19 +1161,16 @@ def page_dispatch(view='dispatch'):
         party=parties.loc[parties.id.astype(int)==pid].iloc[0]
         st.caption(f"Agent: {party['agent_name'] or '—'} · City: {party['city'] or '—'}")
 
-        # Party-specific pending order preview and PDF download directly below Party selection.
+        # Direct PDF download for the selected party; do not render an on-screen preview table.
         party_pending=_pending_raw()
         party_pending=party_pending[party_pending['Party Name'].astype(str)==str(party['party_name'])].copy()
         party_report=_pending_report_rows(party_pending,show_party=False)
-        st.markdown('#### Selected Party Pending Orders')
-        st.markdown(f"**Party Name: {party['party_name']}**")
         if party_report.empty:
             st.info('આ Party માટે હાલ કોઈ Pending Order નથી.')
         else:
-            st.dataframe(party_report[['Order No.','Order Date','SKU Code','M','L','XL','XXL','Qty','Discount','Amount']],use_container_width=True,hide_index=True)
             safe_party=''.join(ch if ch.isalnum() or ch in ('-','_') else '_' for ch in str(party['party_name'])).strip('_') or 'Party'
             party_pdf=pending_report_pdf_bytes(f"Pending Orders - {party['party_name']}",party_report[['Order No.','Order Date','SKU Code','M','L','XL','XXL','Qty','Discount','Amount']])
-            st.download_button('Preview / Download Party Pending PDF',party_pdf,file_name=f"Pending_Orders_{safe_party}.pdf",mime='application/pdf',key=f'party_pending_dispatch_pdf_{int(pid)}',use_container_width=True)
+            st.download_button('Pending Order Download PDF',party_pdf,file_name=f"Pending_Orders_{safe_party}.pdf",mime='application/pdf',key=f'party_pending_dispatch_pdf_{int(pid)}',use_container_width=True)
         df=q("""SELECT o.order_no AS "Order No.",o.order_date AS "Order Date",
            i.particulars AS "SKU Code",s.size_code AS "Size",s.id AS size_id,
            s.ordered_qty AS "Order Qty",o.narration AS Details,
