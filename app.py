@@ -1094,6 +1094,42 @@ def pending_report_pdf_bytes(title, df):
     return buff.getvalue()
 
 
+def party_pending_pdf_bytes(party, report, order_meta):
+    """Build a party-wise pending PDF with party/transport/GST/packaging details and pending-only totals."""
+    buff=io.BytesIO()
+    doc=SimpleDocTemplate(buff,pagesize=landscape(A4),rightMargin=10*mm,leftMargin=10*mm,topMargin=10*mm,bottomMargin=10*mm)
+    styles=getSampleStyleSheet()
+    title_style=ParagraphStyle("PartyPendingTitle",parent=styles["Title"],alignment=TA_CENTER,fontSize=15,leading=18,textColor=colors.HexColor("#173b5c"))
+    label_style=ParagraphStyle("PartyPendingLabel",parent=styles["BodyText"],fontSize=8,leading=11)
+    story=[Paragraph("PARTY WISE PENDING ORDER REPORT",title_style),Spacer(1,5*mm)]
+    def safe(v):
+        value="—" if v is None or str(v).strip()=="" else str(v)
+        return value.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;")
+    party_rows=[
+        [Paragraph(f"<b>Party Name:</b> {safe(party.get('party_name'))}",label_style),Paragraph(f"<b>City:</b> {safe(party.get('city'))}",label_style),Paragraph(f"<b>State:</b> {safe(party.get('state'))}",label_style)],
+        [Paragraph(f"<b>Transport ID:</b> {safe(party.get('transport_gst_number'))}",label_style),Paragraph(f"<b>Transport Name:</b> {safe(party.get('transport_details'))}",label_style),Paragraph(f"<b>Party GST Number:</b> {safe(party.get('gst_number'))}",label_style)],
+        [Paragraph(f"<b>Packaging Details:</b> {safe(order_meta.get('packaging'))}",label_style),Paragraph(f"<b>GST:</b> {safe(order_meta.get('gst'))}",label_style),Paragraph(f"<b>Pending Order No.:</b> {safe(order_meta.get('order_numbers'))}",label_style)],
+    ]
+    info=Table(party_rows,colWidths=[(landscape(A4)[0]-20*mm)/3]*3)
+    info.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#F2F6FA")),("BOX",(0,0),(-1,-1),.6,colors.HexColor("#B7C6D6")),("INNERGRID",(0,0),(-1,-1),.35,colors.HexColor("#D4DEE8")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("LEFTPADDING",(0,0),(-1,-1),7),("RIGHTPADDING",(0,0),(-1,-1),7),("TOPPADDING",(0,0),(-1,-1),7),("BOTTOMPADDING",(0,0),(-1,-1),7)]))
+    story.extend([info,Spacer(1,6*mm),Paragraph("PENDING ITEM DETAILS",ParagraphStyle("PendingItemsHeading",parent=styles["Heading2"],fontSize=11,textColor=colors.HexColor("#173b5c")))])
+    cols=["Order No.","Order Date","SKU Code","M","L","XL","XXL","Qty","Discount","Amount"]
+    data=[[Paragraph(f"<b>{safe(c)}</b>",label_style) for c in cols]]
+    for _,r in report.iterrows():
+        data.append([safe(r.get(c,"")) for c in cols])
+    widths=[19*mm,22*mm,35*mm,12*mm,12*mm,12*mm,12*mm,15*mm,20*mm,25*mm]
+    tbl=Table(data,colWidths=widths,repeatRows=1,hAlign="LEFT")
+    tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#E8EEF5")),("TEXTCOLOR",(0,0),(-1,0),colors.HexColor("#173b5c")),("GRID",(0,0),(-1,-1),.35,colors.HexColor("#B7C3D0")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(3,1),(-1,-1),"RIGHT"),("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#F5F7FA")]),("FONTSIZE",(0,0),(-1,-1),7),("LEFTPADDING",(0,0),(-1,-1),5),("RIGHTPADDING",(0,0),(-1,-1),5),("TOPPADDING",(0,0),(-1,-1),5),("BOTTOMPADDING",(0,0),(-1,-1),5)]))
+    story.extend([tbl,Spacer(1,5*mm)])
+    total_qty=int(pd.to_numeric(report["Qty"],errors="coerce").fillna(0).sum())
+    total_amount=float(pd.to_numeric(report["Amount"],errors="coerce").fillna(0).sum())
+    totals=Table([[Paragraph(f"<b>Total Pending Qty:</b> {total_qty}",label_style),Paragraph(f"<b>Total Pending Amount:</b> ₹{total_amount:,.2f}",label_style)]],colWidths=[90*mm,90*mm])
+    totals.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),colors.HexColor("#EAF1F8")),("BOX",(0,0),(-1,-1),.6,colors.HexColor("#B7C6D6")),("LEFTPADDING",(0,0),(-1,-1),8),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8)]))
+    story.append(totals)
+    doc.build(story)
+    return buff.getvalue()
+
+
 def _pending_raw():
     df=q("""SELECT p.party_name AS "Party Name",COALESCE(a.agent_name,'—') AS "Agent Name",
       o.order_no AS "Order No.",o.order_date AS "Order Date",i.particulars AS "SKU Code",
@@ -1261,10 +1297,10 @@ def page_dispatch(view='dispatch'):
 
     raw=_pending_raw()
     if view=='party':
-        parties=q('SELECT party_name FROM parties ORDER BY party_name')
+        parties=q('SELECT id,party_name FROM parties ORDER BY party_name')
         options=['All Parties']+parties['party_name'].dropna().unique().tolist()
         chosen=st.selectbox('Select Party',options,key='party_pending_report_filter')
-        if chosen!='All Parties': raw=raw[raw['Party Name']==chosen]
+        if chosen!='All Parties': raw=raw[raw['Party Name']==chosen].copy()
         show_party=chosen=='All Parties'
         filename='shubhvastra_party_pending_report.pdf'
     elif view=='agent':
@@ -1294,7 +1330,30 @@ def page_dispatch(view='dispatch'):
     else:
         st.dataframe(shown,use_container_width=True,hide_index=True)
         st.caption(f'Total pending pieces: {int(shown["Qty"].sum())} · Amount: ₹{shown["Amount"].sum():,.2f}')
-        st.download_button('Download PDF',pending_report_pdf_bytes(labels[view],shown),file_name=filename,mime='application/pdf',key=f'{view}_pending_pdf',use_container_width=True)
+        if view=='party' and chosen!='All Parties':
+            party_row=one("SELECT id,party_name,city,state,gst_number,transport_details,transport_gst_number FROM parties WHERE party_name=:name ORDER BY id LIMIT 1",{"name":chosen})
+            if party_row:
+                meta_rows=q("""SELECT DISTINCT o.order_no,o.packaging,o.gst_type FROM orders o JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id WHERE o.party_id=:pid AND o.cancelled=0 AND s.cancelled=0 AND s.ordered_qty>COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)+COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0) ORDER BY o.order_no DESC""",{"pid":int(party_row['id'])})
+                order_numbers=', '.join(str(int(x)) for x in meta_rows['order_no'].tolist()) if not meta_rows.empty else ''
+                packaging_values=[]; gst_values=[]
+                for _,mr in meta_rows.iterrows():
+                    try:
+                        pv=json.loads(mr.get('packaging') or '[]')
+                        if isinstance(pv,list): packaging_values.extend(str(x) for x in pv if str(x).strip())
+                        elif pv: packaging_values.append(str(pv))
+                    except (ValueError,TypeError):
+                        if mr.get('packaging'): packaging_values.append(str(mr.get('packaging')))
+                    if str(mr.get('gst_type') or '').strip(): gst_values.append(str(mr.get('gst_type')))
+                order_meta={"order_numbers":order_numbers,"packaging":', '.join(dict.fromkeys(packaging_values)),"gst":', '.join(dict.fromkeys(gst_values))}
+                party_pdf=party_pending_pdf_bytes(dict(party_row),shown,order_meta)
+                safe_party=''.join(ch if ch.isalnum() or ch in ('-','_') else '_' for ch in str(chosen)).strip('_') or 'Party'
+                safe_orders='_'.join(str(int(x)) for x in meta_rows['order_no'].tolist()) or 'Order'
+                party_filename=f"{safe_orders}_pending_order_{safe_party}.pdf"
+                st.download_button('Download PDF',party_pdf,file_name=party_filename,mime='application/pdf',key='party_pending_pdf_custom',use_container_width=True)
+            else:
+                st.download_button('Download PDF',pending_report_pdf_bytes(labels[view],shown),file_name=filename,mime='application/pdf',key=f'{view}_pending_pdf',use_container_width=True)
+        else:
+            st.download_button('Download PDF',pending_report_pdf_bytes(labels[view],shown),file_name=filename,mime='application/pdf',key=f'{view}_pending_pdf',use_container_width=True)
 
 
 
@@ -1650,44 +1709,12 @@ def page_settings():
     if not is_admin():
         st.error("Utilities ફક્ત Main Admin માટે ઉપલબ્ધ છે.")
         return
-    user_tab, backup_tab, reset_tab = st.tabs(["User Name & Password", "Backup & Restore", "Final Go-Live Reset"])
+    user_tab, backup_tab = st.tabs(["User Name & Password", "Backup & Restore"])
     with user_tab:
         page_users()
     with backup_tab:
         page_backup_restore()
-    with reset_tab:
-        page_final_go_live_reset()
-
-
-def page_final_go_live_reset():
-    """Admin-only, explicitly confirmed cleanup of transactional order data only."""
-    if not is_admin():
-        st.error("આ વિભાગ ફક્ત Main Admin માટે ઉપલબ્ધ છે.")
-        return
-    st.title("Final Go-Live Reset — Demo Orders")
-    st.warning("આ પ્રક્રિયા બધા Orders, Pending quantities, Dispatched history અને Cancelled records કાયમી delete કરશે. Party Master, Agent Master, Item Master (SKU) અને User Login અકબંધ રહેશે.")
-    st.markdown("**Delete થનારા records:** Orders, Order Items, Size quantities, Dispatch entries અને Cancellation entries.\n\n**સુરક્ષિત રહેનારા records:** Parties, Agents, SKU Master અને Users.")
-    st.info("Reset પહેલાં Backup & Restore tab માંથી Full Backup ZIP download કરી લો.")
-    typed = st.text_input("Confirm કરવા માટે નીચે EXACT લખો: DELETE ALL ORDERS", key="final_reset_phrase")
-    confirmed = st.checkbox("હું ખાતરી આપું છું કે backup લીધું છે અને ફક્ત order data delete કરવાનું સમજીને મંજૂરી આપું છું.", key="final_reset_confirm")
-    if st.button("Permanently Delete All Demo Orders", type="primary", disabled=(typed.strip() != "DELETE ALL ORDERS" or not confirmed), key="final_delete_orders"):
-        try:
-            with engine.begin() as conn:
-                # Delete dependent transactional records first; master data is never touched.
-                conn.execute(text("DELETE FROM order_dispatches"))
-                conn.execute(text("DELETE FROM order_size_cancellations"))
-                conn.execute(text("DELETE FROM order_item_sizes"))
-                conn.execute(text("DELETE FROM order_items"))
-                conn.execute(text("DELETE FROM orders"))
-            for key in list(st.session_state.keys()):
-                if key.startswith(("piece_dispatch_", "piece_cancel_", "piece_details_")):
-                    st.session_state.pop(key, None)
-            st.session_state.pop("last_saved_order_id", None)
-            st.session_state.pop("show_pdf_prompt", None)
-            st.success("બધા Demo Orders, Pending, Dispatched અને Cancelled records delete થયા. Party, Agent, SKU અને User data સુરક્ષિત છે. હવે નવો Order Number 2101 થી શરૂ થશે.")
-        except Exception as e:
-            st.error(f"Order data reset થઈ શક્યું નથી: {e}")
-
+    
 def page_backup_restore():
     st.title("Backup & Restore")
     st.info("તમારો સંપૂર્ણ app data backup ZIP માં download કરો. પછી જરૂર પડે ત્યારે આ ZIP upload કરીને data restore કરી શકો છો.")
