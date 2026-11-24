@@ -1621,6 +1621,91 @@ def page_users():
             st.rerun()
 
 
+
+# ------------------------------------------------------------------
+# FULL BACKUP EXPORT HELPERS
+# ------------------------------------------------------------------
+def _backup_table_names():
+    """Return all application tables, including user access and transaction history."""
+    inspector = inspect(engine)
+    preferred = ["agents", "parties", "sku_master", "orders", "order_items",
+                 "order_item_sizes", "order_dispatches", "order_size_cancellations", "users"]
+    existing = set(inspector.get_table_names())
+    return [name for name in preferred if name in existing] + sorted(existing - set(preferred))
+
+
+def _backup_json_default(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if hasattr(value, "item"):
+        return value.item()
+    return str(value)
+
+
+def _full_backup_payload():
+    tables = {}
+    for table_name in _backup_table_names():
+        frame = q(f'SELECT * FROM "{table_name}"')
+        tables[table_name] = frame.where(pd.notna(frame), None).to_dict(orient="records")
+    return {
+        "format": "shubhvastra-full-backup",
+        "format_version": 1,
+        "created_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "database_engine": engine.dialect.name,
+        "tables": tables,
+    }
+
+
+def make_sqlite_database_backup():
+    """Build a portable .db snapshot of every current application table."""
+    import sqlite3
+    buff = io.BytesIO()
+    # SQLite requires a real file; create it temporarily and return its bytes.
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".db") as tmp:
+        target = sqlite3.connect(tmp.name)
+        try:
+            for table_name in _backup_table_names():
+                frame = q(f'SELECT * FROM "{table_name}"')
+                # Convert timestamps/dates and nullable values to SQLite-friendly values.
+                for col in frame.columns:
+                    if pd.api.types.is_datetime64_any_dtype(frame[col]):
+                        frame[col] = frame[col].map(lambda x: x.isoformat() if pd.notna(x) else None)
+                frame.to_sql(table_name, target, if_exists="replace", index=False)
+            target.commit()
+        finally:
+            target.close()
+        tmp.seek(0)
+        buff.write(tmp.read())
+    return buff.getvalue()
+
+
+def make_party_master_csv():
+    """Export the latest Party Master rows with their linked Agent names."""
+    frame = q("""SELECT p.id AS Party_ID, p.party_name AS Party_Name,
+        p.phone_number AS Phone_Number, p.address AS Address, p.city AS City,
+        p.state AS State, p.gst_number AS Party_GST_Number, p.reference AS Reference,
+        p.transport_details AS Transport_Name, p.transport_gst_number AS Transport_ID,
+        a.agent_name AS Agent_Name
+        FROM parties p LEFT JOIN agents a ON a.id=p.agent_id
+        ORDER BY p.party_name COLLATE NOCASE, p.city COLLATE NOCASE, p.id""")
+    return frame.to_csv(index=False).encode("utf-8-sig")
+
+
+def make_full_backup():
+    """Create ZIP containing full JSON, portable database snapshot and Party CSV."""
+    import zipfile
+    payload = _full_backup_payload()
+    json_bytes = json.dumps(payload, ensure_ascii=False, indent=2, default=_backup_json_default).encode("utf-8")
+    db_bytes = make_sqlite_database_backup()
+    parties_csv = make_party_master_csv()
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("1_full_restore.json", json_bytes)
+        archive.writestr("2_shubhvastra_database.db", db_bytes)
+        archive.writestr("3_export_parties.csv", parties_csv)
+    return out.getvalue()
+
 def page_settings():
     st.title("Utilities / Admin Panel")
     if not is_admin():
@@ -1653,6 +1738,10 @@ def page_backup_restore():
         st.download_button("⬇️ Download Database File (.db)", sqlite_bytes,
                            file_name=f"shubhvastra_database_{date.today().isoformat()}.db",
                            mime="application/vnd.sqlite3", use_container_width=False)
+        party_csv_bytes = make_party_master_csv()
+        st.download_button("⬇️ Download Export Parties CSV", party_csv_bytes,
+                           file_name=f"export_parties_{date.today().isoformat()}.csv",
+                           mime="text/csv", use_container_width=False)
     except Exception as e:
         st.error(f"Backup બનાવવામાં સમસ્યા: {e}")
     st.divider()
