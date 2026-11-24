@@ -1441,300 +1441,86 @@ def page_cancelled_orders():
     st.download_button('Download Cancelled PDF',pending_report_pdf_bytes('Cancelled Orders',cancelled),file_name='shubhvastra_cancelled_orders.pdf',mime='application/pdf',key='utilities_cancelled_pdf')
 
 def party_order_summary_pdf(df, totals):
-    buff=io.BytesIO(); doc=SimpleDocTemplate(buff,pagesize=landscape(A4),rightMargin=10*mm,leftMargin=10*mm,topMargin=12*mm,bottomMargin=12*mm)
+    buff=io.BytesIO(); doc=SimpleDocTemplate(buff,pagesize=landscape(A4),rightMargin=8*mm,leftMargin=8*mm,topMargin=10*mm,bottomMargin=10*mm)
     styles=getSampleStyleSheet(); story=[Paragraph("SHUBHVASTRA — PARTY ORDER SUMMARY",styles["Title"]),Spacer(1,4*mm)]
-    data=[["Party Name","City","Phone","Order Qty","Order Amount","Dispatched Qty","Discount Amount","Pending Qty","Pending Amount"]]
+    cols=["Party Name","City","Phone Number","Total Qty","Total Amount","Pending Qty","Pending Amount","Dispatched Qty","Dispatched Amount"]
+    data=[cols]
     for _,r in df.iterrows():
-        data.append([str(r.get("Party Name","")),str(r.get("City","")),str(r.get("Phone Number","")),str(int(r.get("Total Qty",0))),f"₹{float(r.get('Total Amount',0)):,.2f}",str(int(r.get("Dispatched Qty",0))),f"₹{float(r.get('Discount Amount',0)):,.2f}",str(int(r.get("Pending Qty",0))),f"₹{float(r.get('Pending Amount',0)):,.2f}"])
-    data.append(["TOTAL","","",str(int(totals.get("Total Qty",0))),f"₹{float(totals.get('Total Amount',0)):,.2f}",str(int(totals.get("Dispatched Qty",0))),f"₹{float(totals.get('Discount Amount',0)):,.2f}",str(int(totals.get("Pending Qty",0))),f"₹{float(totals.get('Pending Amount',0)):,.2f}"])
-    tab=Table(data,repeatRows=1,colWidths=[45*mm,25*mm,27*mm,20*mm,30*mm,25*mm,30*mm,23*mm,30*mm])
-    tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#173b5c")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("GRID",(0,0),(-1,-1),0.4,colors.grey),("FONTSIZE",(0,0),(-1,-1),7),("ALIGN",(3,1),(-1,-1),"RIGHT"),("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#eaf3fb")),("FONTNAME",(0,-1),(-1,-1),"Helvetica-Bold")]))
+        data.append([str(r.get("Party Name","")),str(r.get("City","")),str(r.get("Phone Number","")),str(int(r.get("Total Qty",0))),f"₹{float(r.get('Total Amount',0)):,.2f}",str(int(r.get("Pending Qty",0))),f"₹{float(r.get('Pending Amount',0)):,.2f}",str(int(r.get("Dispatched Qty",0))),f"₹{float(r.get('Dispatched Amount',0)):,.2f}"])
+    data.append(["TOTAL","","",str(int(totals.get("Total Qty",0))),f"₹{float(totals.get('Total Amount',0)):,.2f}",str(int(totals.get("Pending Qty",0))),f"₹{float(totals.get('Pending Amount',0)):,.2f}",str(int(totals.get("Dispatched Qty",0))),f"₹{float(totals.get('Dispatched Amount',0)):,.2f}"])
+    tab=Table(data,repeatRows=1,colWidths=[42*mm,22*mm,27*mm,18*mm,27*mm,18*mm,27*mm,22*mm,29*mm])
+    tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#173b5c")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("GRID",(0,0),(-1,-1),0.4,colors.grey),("FONTSIZE",(0,0),(-1,-1),7),("ALIGN",(3,1),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#eaf3fb")),("FONTNAME",(0,-1),(-1,-1),"Helvetica-Bold")]))
     story.append(tab); doc.build(story); return buff.getvalue()
+
+
+def _party_order_detail_rows(party_id):
+    rows=q("""SELECT o.id AS order_id,o.order_no AS "Order No",o.order_date AS "Order Date",
+        i.particulars AS "SKU Code",s.size_code AS Size,s.ordered_qty AS "Ordered Qty",
+        COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0) AS "Dispatched Qty",
+        COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0) AS "Cancelled Qty",
+        i.piece_rate AS Rate,COALESCE(i.discount,0) AS "Discount %"
+        FROM orders o JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id
+        WHERE o.party_id=:pid AND o.cancelled=0 ORDER BY o.order_date DESC,o.order_no DESC,i.sr_no,s.size_code""",{"pid":int(party_id)})
+    if rows.empty:
+        return pd.DataFrame(columns=["Order No","Order Date","SKU Code","Size","Ordered Qty","Dispatched Qty","Pending Qty","Rate","Discount %","Order Amount","Dispatched Amount","Pending Amount"])
+    rows["Pending Qty"]=(rows["Ordered Qty"]-rows["Dispatched Qty"]-rows["Cancelled Qty"]).clip(lower=0)
+    net=1-pd.to_numeric(rows["Discount %"],errors="coerce").fillna(0)/100
+    rows["Order Amount"]=rows["Ordered Qty"]*rows["Rate"]*net
+    rows["Dispatched Amount"]=rows["Dispatched Qty"]*rows["Rate"]*net
+    rows["Pending Amount"]=rows["Pending Qty"]*rows["Rate"]*net
+    return rows.drop(columns=["order_id","Cancelled Qty"])
+
 
 def page_reports():
     st.title("Order Reports")
-    tabs=st.tabs(["Party Order Summary","Pending Order List","Agent Wise Order","SKU Wise State Sale Report"])
-    with tabs[0]:
-        summary=q("""SELECT p.id,p.party_name AS "Party Name",p.city AS City,p.phone_number AS "Phone Number",
-          COALESCE(SUM(s.ordered_qty),0) AS "Total Qty",
-          COALESCE(SUM(s.ordered_qty*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Total Amount",
-          COALESCE(SUM(s.ordered_qty*i.piece_rate*COALESCE(i.discount,0)/100.0),0) AS "Discount Amount",
-          COALESCE(SUM((SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id)),0) AS "Dispatched Qty",
-          COALESCE(SUM((s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0))*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Pending Amount",
-          COALESCE(SUM(s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0)),0) AS "Pending Qty"
-          FROM parties p JOIN orders o ON o.party_id=p.id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id
-          WHERE o.cancelled=0 GROUP BY p.id,p.party_name,p.city,p.phone_number ORDER BY p.party_name""")
-        if not summary.empty:
-            summary=summary.drop(columns=["id"])
-            st.dataframe(summary,use_container_width=True,hide_index=True)
-            totals={c:float(summary[c].sum()) for c in ["Total Qty","Total Amount","Dispatched Qty","Discount Amount","Pending Qty","Pending Amount"]}
-            metrics=st.columns(6)
-            metrics[0].metric("Total Order Qty",f"{int(totals['Total Qty']):,} Pcs")
-            metrics[1].metric("Total Order Amount",f"₹{totals['Total Amount']:,.2f}")
-            metrics[2].metric("Dispatched Qty",f"{int(totals['Dispatched Qty']):,} Pcs")
-            metrics[3].metric("Discount Amount",f"₹{totals['Discount Amount']:,.2f}")
-            metrics[4].metric("Pending Qty",f"{int(totals['Pending Qty']):,} Pcs")
-            metrics[5].metric("Pending Amount",f"₹{totals['Pending Amount']:,.2f}")
-            st.download_button("Download Party Order Summary PDF",party_order_summary_pdf(summary,totals),file_name="Shubhvastra_Party_Order_Summary.pdf",mime="application/pdf",use_container_width=True)
-            df_download(summary,"shubhvastra_party_order_summary.csv","Export Party Summary CSV")
-        else: st.info("હજુ કોઈ Party ના Order નથી.")
-    with tabs[1]:
-        df=q("SELECT o.order_no AS \"Order No\",o.order_date AS \"Order Date\",p.party_name AS \"Party Name\",i.particulars AS \"SKU Code\",s.size_code AS Size,s.ordered_qty AS \"Ordered Qty\",s.cancelled AS Cancelled,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM orders o JOIN parties p ON p.id=o.party_id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id WHERE o.cancelled=0 ORDER BY o.order_no DESC")
-        if not df.empty:
-            df["Pending Qty"]=(df["Ordered Qty"]-df["Dispatched"]).clip(lower=0); df=df[df["Pending Qty"]>0].copy()
-            group_cols=["Order No","Order Date","Party Name","SKU Code"]; rows=[]
-            for key,g in df.groupby(group_cols,dropna=False,sort=False):
-                row=dict(zip(group_cols,key))
-                for sz in ("M","L","XL","XXL"): row[sz]=int(g.loc[g["Size"].astype(str).str.upper()==sz,"Pending Qty"].sum())
-                row["Qty"]=int(g["Pending Qty"].sum()); rows.append(row)
-            df=pd.DataFrame(rows,columns=group_cols+["M","L","XL","XXL","Qty"])
-        else: df=pd.DataFrame(columns=["Order No","Order Date","Party Name","SKU Code","M","L","XL","XXL","Qty"])
-        st.dataframe(df,use_container_width=True,hide_index=True); df_download(df,"shubhvastra_pending_order_list.csv","Export Pending Orders")
-    with tabs[2]:
-        agents=q("SELECT a.id,a.agent_name AS \"Agent Name\",COUNT(DISTINCT p.id) AS \"Party Count\",COUNT(DISTINCT o.id) AS \"Order Count\" FROM agents a LEFT JOIN parties p ON p.agent_id=a.id LEFT JOIN orders o ON o.party_id=p.id GROUP BY a.id,a.agent_name ORDER BY a.agent_name")
-        st.caption("Agent પર click કરવા માટે નીચે Agent પસંદ કરો, પછી તેની Parties અને Party Orders જુઓ.")
-        st.dataframe(agents.drop(columns=["id"]) if not agents.empty else agents,use_container_width=True,hide_index=True)
-        if not agents.empty:
-            aid=st.selectbox("Agent Name",agents.id.tolist(),format_func=lambda x:agents.loc[agents.id==x,"Agent Name"].iloc[0])
-            parties=q("SELECT p.id,p.party_name AS \"Party Name\",p.city AS City,p.state AS State,COUNT(DISTINCT o.id) AS \"Order Count\" FROM parties p LEFT JOIN orders o ON o.party_id=p.id WHERE p.agent_id=:id GROUP BY p.id,p.party_name,p.city,p.state ORDER BY p.party_name",{"id":int(aid)})
-            st.subheader("Party List"); st.dataframe(parties.drop(columns=["id"]) if not parties.empty else parties,use_container_width=True,hide_index=True)
-            if not parties.empty:
-                pid=st.selectbox("Party Name",parties.id.tolist(),format_func=lambda x:parties.loc[parties.id==x,"Party Name"].iloc[0])
-                st.subheader("Party Order Details")
-                odf=q("SELECT o.id,o.order_no AS \"Order No\",o.order_date AS \"Order Date\",o.narration AS \"Additional Order Details\",o.cancelled AS Cancelled FROM orders o WHERE o.party_id=:id ORDER BY o.order_no DESC",{"id":int(pid)})
-                st.dataframe(odf.drop(columns=["id"]) if not odf.empty else odf,use_container_width=True,hide_index=True)
-                if not odf.empty:
-                    oid=st.selectbox("View Order",odf.id.tolist(),format_func=lambda x:f"Order #{odf.loc[odf.id==x,'Order No'].iloc[0]}")
-                    det=q("SELECT i.particulars AS Particulars,i.piece_rate AS \"Piece Rate\",i.discount AS Discount,s.size_code AS Size,s.ordered_qty AS Qty,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM order_items i JOIN order_item_sizes s ON s.order_item_id=i.id WHERE i.order_id=:id ORDER BY i.sr_no,s.size_code",{"id":int(oid)})
-                    st.dataframe(det,use_container_width=True,hide_index=True)
-    with tabs[3]:
-        df=q("SELECT i.particulars AS SKU,p.state AS State,SUM(s.ordered_qty) AS \"Ordered Qty\",SUM((SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id)) AS \"Dispatched Qty\" FROM order_items i JOIN orders o ON o.id=i.order_id JOIN parties p ON p.id=o.party_id JOIN order_item_sizes s ON s.order_item_id=i.id GROUP BY i.particulars,p.state ORDER BY i.particulars,p.state")
-        st.dataframe(df,use_container_width=True,hide_index=True)
-        if is_admin(): df_download(df,"shubhvastra_sku_state_sale_report.csv","Export SKU State Report")
-
-
-def page_users():
-    if not is_admin():
-        st.error("આ વિભાગ ફક્ત Main Admin માટે છે.")
+    st.subheader("Party Wise Order Report")
+    st.caption("જે Party ના Order Form આવ્યા છે તે જ Party અહીં દેખાશે. Party પસંદ કરો; તેની Total, Pending અને Dispatched Order Sheets બાજુબાજુમાં મળશે.")
+    search=st.text_input("Search Party Name / City / Phone",key="party_order_report_search",placeholder="Party name, city અથવા phone લખો...")
+    parties=q("""SELECT p.id,p.party_name AS "Party Name",p.city AS City,p.phone_number AS "Phone Number",
+        COALESCE(SUM(s.ordered_qty),0) AS "Total Qty",
+        COALESCE(SUM(s.ordered_qty*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Total Amount",
+        COALESCE(SUM(s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0)),0) AS "Pending Qty",
+        COALESCE(SUM((s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0))*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Pending Amount",
+        COALESCE(SUM((SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id)),0) AS "Dispatched Qty",
+        COALESCE(SUM((SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id)*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Dispatched Amount"
+        FROM parties p JOIN orders o ON o.party_id=p.id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id
+        WHERE o.cancelled=0 GROUP BY p.id,p.party_name,p.city,p.phone_number ORDER BY p.party_name COLLATE NOCASE""")
+    if search.strip() and not parties.empty:
+        mask=parties[["Party Name","City","Phone Number"]].fillna("").astype(str).apply(lambda c:c.str.contains(search.strip(),case=False,regex=False)).any(axis=1)
+        parties=parties[mask].reset_index(drop=True)
+    if parties.empty:
+        st.info("Search મુજબ કોઈ Party Order મળી નથી." if search.strip() else "હજુ કોઈ Party ના Order નથી.")
         return
-    st.title("Admin Panel / User Access")
-    st.caption("Agent user ફક્ત તેની સાથે જોડાયેલી Parties અને તેમના pending, dispatched તથા cancelled reports જોઈ શકશે. Agent કોઈ record edit કરી શકશે નહીં.")
-    agent_df = q("SELECT id, agent_name FROM agents ORDER BY agent_name")
-    agent_ids = agent_df["id"].astype(int).tolist() if not agent_df.empty else []
-    agent_names = agent_df["agent_name"].astype(str).tolist() if not agent_df.empty else []
-    with st.expander("Create New User", expanded=True):
-        with st.form("new_user"):
-            role = st.selectbox("Role", ["admin", "member", "staff", "agent"], format_func=lambda x: x.title(), key="create_role")
-            agent_id = None
-            if role == "agent":
-                if not agent_ids:
-                    st.warning("Agent role user બનાવવા પહેલાં Agent Master માં Agent ઉમેરો.")
-                selected_agent = st.selectbox("Select Agent", agent_ids, format_func=lambda x: agent_df.loc[agent_df.id.astype(int)==x, "agent_name"].iloc[0], key="create_agent_id") if agent_ids else None
-                agent_id = int(selected_agent) if selected_agent is not None else None
-                username = st.text_input("Username (Agent Name)", value=(agent_df.loc[agent_df.id.astype(int)==agent_id, "agent_name"].iloc[0] if agent_id is not None else ""), disabled=True, key="create_agent_username")
-            else:
-                username = st.text_input("Username", key="create_username")
-            password = st.text_input("Password (minimum 10 characters)", type="password", key="create_password")
-            if st.form_submit_button("Create User", type="primary"):
-                if role == "agent" and agent_id is None:
-                    st.error("Agent પસંદ કરો.")
-                elif not username.strip() or len(password) < 10:
-                    st.error("Username અને ઓછામાં ઓછો 10-character password જરૂરી છે.")
-                elif one("SELECT id FROM users WHERE LOWER(username)=LOWER(:u)", {"u":username.strip()}):
-                    st.error("આ username પહેલેથી છે. આ Agent માટે બીજું account હોય તો પહેલું account બદલો.")
-                elif role == "agent" and one("SELECT id FROM users WHERE role='agent' AND agent_id=:aid AND active=1", {"aid":agent_id}):
-                    st.error("આ Agent માટે પહેલેથી active login user છે.")
-                else:
-                    run("INSERT INTO users(username,password_hash,role,active,agent_id) VALUES(:u,:p,:r,1,:aid)", {"u":username.strip(), "p":generate_password_hash(password), "r":role, "aid":agent_id})
-                    st.success("User create થયો.")
-                    st.rerun()
-    df=q('SELECT id AS ID,username AS Username,role AS Role,active AS Active,created_at AS "Created At" FROM users ORDER BY username')
-    st.subheader("Existing Users")
-    if not df.empty:
-        view_df=df.copy()
-        agent_map={int(r.id):str(r.agent_name) for r in agent_df.itertuples()} if not agent_df.empty else {}
-        details=q("SELECT id,agent_id FROM users")
-        detail_map={int(r.id):agent_map.get(int(r.agent_id), "") for r in details.itertuples() if pd.notna(r.agent_id)}
-        view_df["Agent"] = view_df["ID"].map(detail_map).fillna("")
-    else:
-        view_df=df
-    st.dataframe(view_df.drop(columns=["ID"], errors="ignore"),use_container_width=True,hide_index=True)
-    if not df.empty:
-        uid=st.selectbox("Select User",df.ID.tolist(),format_func=lambda x:df.loc[df.ID==x,"Username"].iloc[0],key="admin_selected_user")
-        selected=one("SELECT id,username,role,active,agent_id FROM users WHERE id=:id",{"id":int(uid)})
-        with st.form("edit_user_credentials"):
-            st.write(f"Selected user: **{selected['username']}**")
-            new_role=st.selectbox("Role",["staff","member","admin","agent"],index=["staff","member","admin","agent"].index(selected["role"]) if selected["role"] in ["staff","member","admin","agent"] else 0)
-            new_agent_id = None
-            if new_role == "agent":
-                if agent_ids:
-                    current_index=agent_ids.index(int(selected["agent_id"])) if selected.get("agent_id") is not None and int(selected["agent_id"]) in agent_ids else 0
-                    new_agent_id=st.selectbox("Select Agent",agent_ids,index=current_index,format_func=lambda x:agent_df.loc[agent_df.id.astype(int)==x,"agent_name"].iloc[0],key="edit_agent_id")
-                    new_username=str(agent_df.loc[agent_df.id.astype(int)==int(new_agent_id),"agent_name"].iloc[0])
-                    st.text_input("Username (Agent Name)",value=new_username,disabled=True)
-                else:
-                    st.warning("Agent Master માં કોઈ Agent નથી.")
-                    new_username=selected["username"]
-            else:
-                new_username=st.text_input("Change Username",value=selected["username"])
-            new_password=st.text_input("Set New Password (leave blank to keep current)",type="password")
-            active=st.checkbox("User can login",value=bool(selected["active"]))
-            save=st.form_submit_button("Save User Settings",type="primary")
-        if save:
-            if not new_username.strip():
-                st.error("Username ખાલી ન રાખો.")
-            elif new_role == "agent" and new_agent_id is None:
-                st.error("Agent પસંદ કરો.")
-            elif len(new_password)>0 and len(new_password)<10:
-                st.error("નવો password ઓછામાં ઓછો 10 characters નો હોવો જોઈએ.")
-            elif one("SELECT id FROM users WHERE LOWER(username)=LOWER(:u) AND id<>:id",{"u":new_username.strip(),"id":int(uid)}):
-                st.error("આ username બીજા user દ્વારા વપરાય છે.")
-            elif new_role == "agent" and one("SELECT id FROM users WHERE role='agent' AND agent_id=:aid AND id<>:id AND active=1",{"aid":int(new_agent_id),"id":int(uid)}):
-                st.error("આ Agent માટે બીજું active account પહેલેથી છે.")
-            elif int(uid)==int(current_user()["id"]) and not active:
-                st.error("તમારા પોતાના logged-in admin account ને disable કરી શકતા નથી.")
-            else:
-                run("UPDATE users SET username=:u,role=:r,active=:a,agent_id=:aid WHERE id=:id",{"u":new_username.strip(),"r":new_role,"a":1 if active else 0,"aid":int(new_agent_id) if new_role=="agent" and new_agent_id is not None else None,"id":int(uid)})
-                if new_password:
-                    run("UPDATE users SET password_hash=:p WHERE id=:id",{"p":generate_password_hash(new_password),"id":int(uid)})
-                if int(uid)==int(current_user()["id"]):
-                    st.session_state["authenticated_user"].update({"username":new_username.strip(),"role":new_role,"agent_id":int(new_agent_id) if new_role=="agent" and new_agent_id is not None else None})
-                st.success("User settings update થઈ.")
-                st.rerun()
-
-
-# Keep parent tables before child tables. Every business table is included, including
-# cancellations and user access credentials (password hashes, never plaintext).
-BACKUP_TABLE_ORDER = [
-    "agents", "parties", "sku_master", "users", "orders",
-    "order_items", "order_item_sizes", "order_dispatches",
-    "order_size_cancellations",
-]
-BACKUP_FORMAT_VERSION = 2
-
-def backup_table_names():
-    """Return all application tables known to this release, in FK-safe order."""
-    available = set(inspect(engine).get_table_names())
-    ordered = [name for name in BACKUP_TABLE_ORDER if name in available]
-    # Include future application tables automatically, while excluding database
-    # bookkeeping tables that are not part of Shubhvastra business data.
-    extras = sorted(name for name in available
-                    if name not in ordered and name not in {"alembic_version", "sqlite_sequence"}
-                    and not name.startswith("pg_") )
-    return ordered + extras
-
-BACKUP_TABLES = backup_table_names()
-
-
-def make_full_backup():
-    """Create a portable, app-level backup containing every application table."""
-    table_names = backup_table_names()
-    payload = {"format": "shubhvastra_backup", "version": BACKUP_FORMAT_VERSION,
-               "created_at": datetime.now().isoformat(timespec="seconds"),
-               "source_database": engine.dialect.name,
-               "included_tables": table_names, "tables": {}}
-    for table_name in table_names:
-        payload["tables"][table_name] = q(f'SELECT * FROM "{table_name}"').to_dict(orient="records")
-    raw = json.dumps(payload, ensure_ascii=False, default=str, indent=2).encode("utf-8")
-    mem = io.BytesIO()
-    import zipfile
-    with zipfile.ZipFile(mem, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("shubhvastra_backup.json", raw)
-        zf.writestr("README.txt", "SHUBHVASTRA app backup. Restore this ZIP from Utilities / Backup & Restore. Keep this file private because it may contain business and user data.")
-    return mem.getvalue()
-
-
-def _apply_backup_payload(payload):
-    """Validate and restore a payload into the configured database."""
-    if payload.get("format") != "shubhvastra_backup" or payload.get("version") not in (1, BACKUP_FORMAT_VERSION):
-        raise ValueError("Backup format/version ઓળખી શકાયું નથી.")
-    tables = payload.get("tables", {})
-    target_tables = backup_table_names()
-    required = [name for name in target_tables if name in BACKUP_TABLE_ORDER]
-    if any(name not in tables or not isinstance(tables[name], list) for name in required):
-        raise ValueError("Backup માં જરૂરી business tables ખૂટે છે અથવા data format ખોટો છે.")
-    # Optional tables absent from an older backup are restored as empty only when
-    # they are new to the app; existing backup contents are never silently ignored.
-    for name in target_tables:
-        tables.setdefault(name, [])
-        if not isinstance(tables[name], list):
-            raise ValueError(f"{name} table નો backup data format ખોટો છે.")
-    inspector = inspect(engine)
-    for table_name in target_tables:
-        if not inspector.has_table(table_name):
-            raise ValueError(f"Database માં {table_name} table મળ્યું નથી. App ને પહેલાં reboot કરો.")
-        allowed = {col["name"] for col in inspector.get_columns(table_name)}
-        for row in tables[table_name]:
-            if not isinstance(row, dict) or not set(row).issubset(allowed):
-                raise ValueError(f"{table_name} table ના columns હાલના app સાથે મેળ ખાતા નથી. જૂના database માટે migration જરૂરી હોઈ શકે છે.")
-    # Delete children first to satisfy foreign keys, then restore parents first.
-    with engine.begin() as conn:
-        for table_name in reversed(target_tables):
-            conn.execute(text(f'DELETE FROM "{table_name}"'))
-        for table_name in target_tables:
-            rows = tables[table_name]
-            if not rows:
-                continue
-            columns = list(rows[0].keys())
-            if not columns:
-                continue
-            col_sql = ", ".join(f'"{c}"' for c in columns)
-            val_sql = ", ".join(f':v{i}' for i in range(len(columns)))
-            stmt = text(f'INSERT INTO "{table_name}" ({col_sql}) VALUES ({val_sql})')
-            for row in rows:
-                conn.execute(stmt, {f'v{i}': row.get(col) for i, col in enumerate(columns)})
-        if engine.dialect.name == "postgresql":
-            for table_name in target_tables:
-                if "id" in {col["name"] for col in inspector.get_columns(table_name)}:
-                    conn.execute(text(f"SELECT setval(pg_get_serial_sequence(:tbl, 'id'), COALESCE((SELECT MAX(id) FROM \"{table_name}\"), 1), (SELECT MAX(id) IS NOT NULL FROM \"{table_name}\"))"), {"tbl": table_name})
-    return {name: len(tables[name]) for name in target_tables}
-
-
-def restore_full_backup(uploaded_bytes, filename="backup.zip"):
-    """Restore app ZIP backups or SQLite .db/.sqlite/.sqlite3 files."""
-    import zipfile, sqlite3
-    if uploaded_bytes[:16] == b"SQLite format 3\x00" or filename.lower().endswith((".db", ".sqlite", ".sqlite3")):
-        source = sqlite3.connect(":memory:")
-        try:
-            source.deserialize(uploaded_bytes)
-            available = {row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            required = [name for name in backup_table_names() if name in BACKUP_TABLE_ORDER]
-            missing = [name for name in required if name not in available]
-            if missing:
-                raise ValueError("આ database માં Shubhvastra ના જરૂરી tables નથી: " + ", ".join(missing) + ". જો આ જૂની party_reporting.db છે તો પહેલા migration format માં convert કરવી પડશે.")
-            payload = {"format": "shubhvastra_backup", "version": BACKUP_FORMAT_VERSION, "tables": {}}
-            for name in backup_table_names():
-                if name not in available:
-                    payload["tables"][name] = []
-                    continue
-                cursor = source.execute(f'SELECT * FROM "{name}"')
-                columns = [item[0] for item in cursor.description]
-                payload["tables"][name] = [dict(zip(columns, row)) for row in cursor.fetchall()]
-        finally:
-            source.close()
-        return _apply_backup_payload(payload)
+    party_view=parties.drop(columns=["id"])
+    center_cols={c:st.column_config.NumberColumn(c,format="%d",alignment="center") for c in ["Total Qty","Pending Qty","Dispatched Qty"]}
+    center_cols.update({c:st.column_config.NumberColumn(c,format="₹%.2f",alignment="center") for c in ["Total Amount","Pending Amount","Dispatched Amount"]})
+    event=st.dataframe(party_view,use_container_width=True,hide_index=True,column_config=center_cols,on_select="rerun",selection_mode="single-row",key="party_order_report_table")
+    selected=None
     try:
-        with zipfile.ZipFile(io.BytesIO(uploaded_bytes), "r") as zf:
-            if "shubhvastra_backup.json" not in zf.namelist():
-                raise ValueError("આ ZIP માં Shubhvastra backup મળ્યું નથી. Full Backup ZIP અથવા .db/.sqlite database file પસંદ કરો.")
-            payload = json.loads(zf.read("shubhvastra_backup.json").decode("utf-8"))
-    except zipfile.BadZipFile as exc:
-        raise ValueError("આ file ઓળખી શકાતી નથી. Shubhvastra backup .zip અથવા compatible .db/.sqlite/.sqlite3 ફાઇલ upload કરો. .rar સીધું support થતું નથી.") from exc
-    return _apply_backup_payload(payload)
-
-
-def make_sqlite_database_backup():
-    """Export a portable SQLite database snapshot from the live app tables."""
-    import sqlite3
-    db = sqlite3.connect(":memory:")
-    try:
-        for table_name in backup_table_names():
-            frame = q(f'SELECT * FROM "{table_name}"')
-            frame.to_sql(table_name, db, if_exists="replace", index=False)
-        db.commit()
-        return db.serialize()
-    finally:
-        db.close()
+        if event.selection.rows: selected=parties.iloc[int(event.selection.rows[0])]
+    except Exception: pass
+    if selected is None:
+        chosen=st.selectbox("Select Party to open its Order Sheets",parties.id.tolist(),format_func=lambda pid: parties.loc[parties.id==pid,"Party Name"].iloc[0]+" — "+str(parties.loc[parties.id==pid,"City"].iloc[0]),key="party_order_report_select")
+        selected=parties.loc[parties.id==chosen].iloc[0]
+    pid=int(selected["id"]); party_name=str(selected["Party Name"])
+    st.markdown(f"### {party_name} — Order Details")
+    details=_party_order_detail_rows(pid)
+    if details.empty: st.info("આ Party માટે Order Details ઉપલબ્ધ નથી."); return
+    pending=details[pd.to_numeric(details["Pending Qty"],errors="coerce").fillna(0)>0].copy()
+    dispatched=details[pd.to_numeric(details["Dispatched Qty"],errors="coerce").fillna(0)>0].copy()
+    tabs=st.tabs(["Total Order List","Total Pending Order List","Total Dispatched Order List"])
+    for tab,df,title,slug,qtycol,amtcol in [
+        (tabs[0],details,"Total Order List","total_orders","Ordered Qty","Order Amount"),
+        (tabs[1],pending,"Total Pending Order List","pending_orders","Pending Qty","Pending Amount"),
+        (tabs[2],dispatched,"Total Dispatched Order List","dispatched_orders","Dispatched Qty","Dispatched Amount")]:
+        with tab:
+            qty=int(pd.to_numeric(df[qtycol],errors="coerce").fillna(0).sum()) if not df.empty else 0
+            amount=float(pd.to_numeric(df[amtcol],errors="coerce").fillna(0).sum()) if not df.empty else 0.0
+            m1,m2=st.columns(2); m1.metric("Pieces",f"{qty:,}"); m2.metric("Amount",f"₹{amount:,.2f}")
+            st.dataframe(df.drop(columns=["Rate","Discount %"],errors="ignore"),use_container_width=True,hide_index=True)
+            safe="".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in party_name).strip("_") or "Party"
+            st.download_button(f"Download {title} PDF",pending_report_pdf_bytes(f"{party_name} — {title}",df),file_name=f"{safe}_{slug}.pdf",mime="application/pdf",key=f"party_{pid}_{slug}_pdf")
+            df_download(df,f"{safe}_{slug}.csv",f"Export {title} CSV")
 
 
 def page_settings():
@@ -1758,11 +1544,11 @@ def page_backup_restore():
         st.warning("Local SQLite mode છે. Streamlit Cloud પર permanent/shared data માટે managed PostgreSQL અને DATABASE_URL configure કરવું જરૂરી છે.")
     st.divider()
     st.subheader("1. Full Backup Download")
-    st.write("Full Backup ZIP માં Party ના બધા details, Agent, Item Master / SKU, તમામ Orders અને Order History, order items અને sizes, Pending તથા Dispatched records, Dispatch History, Cancelled quantities, અને Admin Panel ના User Name, Role, Agent Mapping, Active Status તથા Password Login Hash સામેલ છે.")
+    st.write("Full Backup ZIP માં 1) Full Restore JSON, 2) Database File (.db), અને 3) Party Master ની latest Export Parties CSV — ત્રણેય files સામેલ છે. Full Restore JSON માં Party, Agent, SKU, Orders, Pending, Dispatched, History, Cancelled અને User Access data સામેલ છે.")
     st.info("Restore કર્યા પછી જૂના backup માં જે user accounts, roles અને login credentials હતા તે જ પાછા આવશે. Password સુરક્ષિત hash સ્વરૂપે સાચવાય છે; ZIP માં plaintext password રાખવામાં આવતો નથી, પરંતુ restore પછી એ જ password થી login થઈ શકશે.")
     try:
         backup_bytes = make_full_backup()
-        st.download_button("⬇️ Download Full Backup ZIP", backup_bytes,
+        st.download_button("⬇️ Download Full Backup ZIP (JSON + .db + Parties CSV)", backup_bytes,
                            file_name=f"shubhvastra_backup_{date.today().isoformat()}.zip",
                            mime="application/zip", type="primary", use_container_width=False)
         sqlite_bytes = make_sqlite_database_backup()
