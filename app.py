@@ -1523,6 +1523,104 @@ def page_reports():
             df_download(df,f"{safe}_{slug}.csv",f"Export {title} CSV")
 
 
+
+def page_users():
+    """Admin-only user access management. Passwords are stored as secure hashes."""
+    st.subheader("User Access Management")
+    st.caption("Username, Role, Agent Mapping અને Password અહીંથી manage કરો. Password database માં secure hash તરીકે જ સાચવાય છે.")
+    agents = q("SELECT id, agent_name FROM agents ORDER BY agent_name COLLATE NOCASE")
+    agent_labels = {int(r["id"]): str(r["agent_name"]) for _, r in agents.iterrows()} if not agents.empty else {}
+
+    users = q("""SELECT u.id,u.username,u.role,u.active,u.agent_id,a.agent_name
+                 FROM users u LEFT JOIN agents a ON a.id=u.agent_id
+                 ORDER BY u.username COLLATE NOCASE""")
+    if not users.empty:
+        display = users[["username","role","active","agent_name"]].copy()
+        display.columns = ["User Name","Role","Active","Agent Name"]
+        display["Active"] = display["Active"].map({1:"Yes",0:"No"})
+        st.dataframe(display, use_container_width=True, hide_index=True)
+    else:
+        st.info("હજુ કોઈ user account નથી.")
+
+    st.markdown("#### Add New User")
+    with st.form("admin_add_user_form", clear_on_submit=True):
+        c1,c2 = st.columns(2)
+        new_username = c1.text_input("User Name", key="admin_new_username")
+        new_role = c2.selectbox("Role", ["admin","member","staff","agent"], format_func=lambda x:x.title(), key="admin_new_role")
+        agent_options = [None] + list(agent_labels.keys())
+        new_agent = st.selectbox("Agent Mapping (Agent role માટે જરૂરી)", agent_options,
+            format_func=lambda x:"— Not Linked —" if x is None else agent_labels.get(x,str(x)), key="admin_new_agent")
+        c3,c4 = st.columns(2)
+        new_password = c3.text_input("Password", type="password", key="admin_new_password")
+        new_confirm = c4.text_input("Confirm Password", type="password", key="admin_new_confirm")
+        add_user = st.form_submit_button("Add User", type="primary")
+    if add_user:
+        uname = new_username.strip()
+        if not uname:
+            st.error("User Name જરૂરી છે.")
+        elif len(new_password) < 10:
+            st.error("Password ઓછામાં ઓછો 10 characters નો રાખો.")
+        elif new_password != new_confirm:
+            st.error("બંને Password સરખા નથી.")
+        elif one("SELECT id FROM users WHERE LOWER(username)=LOWER(:u)", {"u":uname}):
+            st.error("આ User Name પહેલેથી ઉપયોગમાં છે.")
+        elif new_role == "agent" and new_agent is None:
+            st.error("Agent Role માટે Agent Master માંથી Agent પસંદ કરો.")
+        else:
+            run("INSERT INTO users(username,password_hash,role,active,agent_id) VALUES(:u,:p,:r,1,:a)",
+                {"u":uname,"p":generate_password_hash(new_password),"r":new_role,"a":new_agent if new_role=="agent" else None})
+            st.success(f"User '{uname}' સફળતાપૂર્વક બનાવ્યો.")
+            st.rerun()
+
+    st.divider()
+    st.markdown("#### Edit User / Reset Password")
+    users = q("SELECT id,username,role,active,agent_id FROM users ORDER BY username COLLATE NOCASE")
+    if users.empty:
+        return
+    user_ids = [int(x) for x in users["id"].tolist()]
+    selected_id = st.selectbox("Select User", user_ids,
+        format_func=lambda uid: str(users.loc[users.id==uid,"username"].iloc[0]), key="admin_edit_user_id")
+    selected = users.loc[users.id==selected_id].iloc[0]
+    with st.form(f"admin_edit_user_form_{selected_id}"):
+        c1,c2 = st.columns(2)
+        edit_username = c1.text_input("User Name", value=str(selected["username"]))
+        current_role = str(selected["role"])
+        edit_role = c2.selectbox("Role", ["admin","member","staff","agent"], index=( ["admin","member","staff","agent"].index(current_role) if current_role in ["admin","member","staff","agent"] else 2), format_func=lambda x:x.title())
+        old_agent = int(selected["agent_id"]) if pd.notna(selected["agent_id"]) else None
+        agent_values = [None] + list(agent_labels.keys())
+        edit_agent = st.selectbox("Agent Mapping", agent_values,
+            index=agent_values.index(old_agent) if old_agent in agent_values else 0,
+            format_func=lambda x:"— Not Linked —" if x is None else agent_labels.get(x,str(x)))
+        active = st.checkbox("User Active", value=bool(int(selected["active"])))
+        st.caption("Password બદલવો હોય તો નીચે બંને fields ભરો; ખાલી રાખશો તો હાલનો Password યથાવત્ રહેશે.")
+        c3,c4 = st.columns(2)
+        reset_password = c3.text_input("New Password", type="password")
+        reset_confirm = c4.text_input("Confirm New Password", type="password")
+        save_user = st.form_submit_button("Save User Changes", type="primary")
+    if save_user:
+        uname = edit_username.strip()
+        duplicate = one("SELECT id FROM users WHERE LOWER(username)=LOWER(:u) AND id<>:id", {"u":uname,"id":selected_id}) if uname else None
+        if not uname:
+            st.error("User Name ખાલી ન રાખો.")
+        elif duplicate:
+            st.error("આ User Name બીજા user માટે ઉપયોગમાં છે.")
+        elif edit_role == "agent" and edit_agent is None:
+            st.error("Agent Role માટે Agent Master માંથી Agent પસંદ કરો.")
+        elif bool(active) is False and selected_id == int(current_user()["id"]):
+            st.error("તમે હાલના logged-in Admin ને disable કરી શકતા નથી.")
+        elif reset_password and len(reset_password) < 10:
+            st.error("New Password ઓછામાં ઓછો 10 characters નો રાખો.")
+        elif reset_password != reset_confirm:
+            st.error("New Password અને Confirm Password સરખા નથી.")
+        else:
+            params={"u":uname,"r":edit_role,"a":edit_agent if edit_role=="agent" else None,"active":1 if active else 0,"id":selected_id}
+            run("UPDATE users SET username=:u,role=:r,agent_id=:a,active=:active WHERE id=:id",params)
+            if reset_password:
+                run("UPDATE users SET password_hash=:p WHERE id=:id",{"p":generate_password_hash(reset_password),"id":selected_id})
+            st.success(f"User '{uname}' ની વિગતો અપડેટ થઈ.")
+            st.rerun()
+
+
 def page_settings():
     st.title("Utilities / Admin Panel")
     if not is_admin():
