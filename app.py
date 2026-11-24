@@ -298,7 +298,7 @@ def order_pdf_bytes(order, items_df):
     label_style = ParagraphStyle("OrderInfoLabel", parent=small, fontName="Helvetica-Bold")
     # Header arranged to match the supplied reference image: two logos on one row,
     # TRISHIV on the left and SHUBHVASTRA on the right; contact details below.
-    story = []
+    story = [Paragraph("<b>ORDER FORM</b>", ParagraphStyle("OrderFormTop", parent=styles["Heading1"], alignment=TA_CENTER, fontSize=15, leading=17, spaceAfter=3))]
     app_dir = BASE
     trishiv_logo = app_dir / "static" / "trishiv_logo.jpg"
     shubhvastra_logo = app_dir / "static" / "shubhvastra_logo.png"
@@ -370,6 +370,7 @@ def order_pdf_bytes(order, items_df):
     tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#F7F4EA")),("TEXTCOLOR",(0,0),(-1,0),colors.black),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),7.5),("GRID",(0,0),(-1,-1),0.45,colors.HexColor("#9aa8b8")),("VALIGN",(0,0),(-1,-1),"MIDDLE"),("ALIGN",(2,1),(-1,-1),"RIGHT"),("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#eaf3fb")),("FONTNAME",(0,-1),(-1,-1),"Helvetica-Bold"),("LEFTPADDING",(0,0),(-1,-1),3),("RIGHTPADDING",(0,0),(-1,-1),3),("TOPPADDING",(0,0),(-1,-1),4),("BOTTOMPADDING",(0,0),(-1,-1),4)]))
     story.extend([tab, Spacer(1,4*mm)])
     if order.get("narration"): story.append(Paragraph(f"<b>Additional Order Details:</b> {str(order['narration'])}",small))
+    story.extend([Spacer(1,5*mm), Paragraph("<b>Please note:</b> This document is an Order Form only and is not a final GST Invoice.", ParagraphStyle("OrderDisclaimer", parent=small, alignment=TA_CENTER, fontSize=9, leading=11, textColor=colors.HexColor("#8B1E1E")))])
     doc.build(story)
     return buff.getvalue()
 
@@ -622,6 +623,8 @@ def page_agents():
 
 def page_parties():
     st.title("Party Master")
+    flash=st.session_state.pop("party_master_flash",None)
+    if flash: st.success(flash)
     agents=q("SELECT id,agent_name FROM agents ORDER BY agent_name")
     with st.expander("＋ Add New Party", expanded=False):
         # Keep Reference outside a form so the Agent Name field reacts immediately.
@@ -638,7 +641,7 @@ def page_parties():
             elif one("SELECT id FROM parties WHERE LOWER(party_name)=LOWER(:n) AND phone_number=:p AND LOWER(city)=LOWER(:c) AND LOWER(state)=LOWER(:s)",{"n":name.strip(),"p":phone.strip(),"c":city.strip(),"s":state.strip()}): st.error("આ જ વિગતોવાળી Party પહેલેથી છે.")
             else:
                 run("INSERT INTO parties(party_name,phone_number,address,city,state,gst_number,reference,transport_details,transport_gst_number,agent_id) VALUES(:n,:p,:a,:c,:s,:g,:r,:t,:tg,:aid)",{"n":name.strip(),"p":phone.strip(),"a":address.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":reference,"t":transport.strip(),"tg":tgst.strip(),"aid":aid})
-                st.success("Party save થઈ.")
+                st.session_state["party_master_flash"]="New Party successfully saved. "
                 for k in ["party_add_name","party_add_phone","party_add_address","party_add_city","party_add_state","party_add_gst","party_add_transport","party_add_transport_id","party_add_agent"]:
                     st.session_state.pop(k,None)
                 st.rerun()
@@ -665,7 +668,7 @@ def page_parties():
                     aid_opts=[None]+agents.id.tolist(); cur=old["agent_id"] if old["agent_id"] in aid_opts else None
                     aid=st.selectbox("Agent",aid_opts,index=aid_opts.index(cur),format_func=lambda x:"— None —" if x is None else agents.loc[agents.id==x,"agent_name"].iloc[0])
                     if st.form_submit_button("Save Changes",type="primary"):
-                        run("UPDATE parties SET party_name=:n,phone_number=:p,address=:a,city=:c,state=:s,gst_number=:g,reference=:r,transport_details=:td,transport_gst_number=:tg,agent_id=:aid WHERE id=:id",{"n":n.strip(),"p":p.strip(),"a":a.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":ref,"td":td.strip(),"tg":tg.strip(),"aid":aid,"id":int(pid)}); st.success("Party update થઈ."); st.rerun()
+                        run("UPDATE parties SET party_name=:n,phone_number=:p,address=:a,city=:c,state=:s,gst_number=:g,reference=:r,transport_details=:td,transport_gst_number=:tg,agent_id=:aid WHERE id=:id",{"n":n.strip(),"p":p.strip(),"a":a.strip(),"c":city.strip(),"s":state.strip(),"g":gst.strip(),"r":ref,"td":td.strip(),"tg":tg.strip(),"aid":aid,"id":int(pid)}); st.session_state["party_master_flash"]="Party details successfully updated."; st.rerun()
     if is_admin():
         df_download(df,"shubhvastra_parties.csv","Export Parties CSV")
         export_cols=["Party Name","Phone Number","Address","City","State","Party GST Number","Reference","Agent Name","Transport Name","Transport ID"]
@@ -845,14 +848,11 @@ def page_order_form(edit_id=None):
             if sku != previous_sku:
                 st.session_state[visible_rate_key]=f"{sku_rate:.2f}"
             st.session_state[previous_sku_key]=sku
-            rate_default=float(old.piece_rate) if old is not None else sku_rate
+            rate_default=sku_rate
             rkey=f"ord_rate_{ix}"
-            if edit_id:
-                if rkey not in st.session_state: st.session_state[rkey]=rate_default
-                rate=float(st.session_state.get(rkey,rate_default) or 0)
-            else:
-                rate=sku_rate
-                st.session_state[rkey]=sku_rate
+            # Enforce Item Master Sale Rate for the selected SKU in both new and edited orders.
+            rate=sku_rate
+            st.session_state[rkey]=sku_rate
             sizes={}
             for j,size in enumerate(SIZES):
                 qkey=f"ord_qty_{ix}_{size}"
@@ -869,10 +869,7 @@ def page_order_form(edit_id=None):
             except ValueError:
                 st.error(f"Row {ix+1}: Discount 0 થી 100 વચ્ચે દાખલ કરો.")
                 disc=0.0
-            if visible_rate_key not in st.session_state:
-                st.session_state[visible_rate_key]=f"{float(rate):.2f}"
-            else:
-                st.session_state[visible_rate_key]=f"{float(st.session_state[visible_rate_key] or 0):.2f}"
+            st.session_state[visible_rate_key]=f"{float(sku_rate):.2f}"
             item_cols[6].text_input("WSP Rate (₹)",key=visible_rate_key,disabled=True)
             if sku and sku_match.empty:
                 item_cols[0].caption("આ SKU Code Item Master માં મળ્યો નથી.")
@@ -1330,6 +1327,12 @@ def page_dispatch(view='dispatch'):
     else:
         st.dataframe(shown,use_container_width=True,hide_index=True)
         st.caption(f'Total pending pieces: {int(shown["Qty"].sum())} · Amount: ₹{shown["Amount"].sum():,.2f}')
+        if view=='sku':
+            sku_size_summary=shown.groupby('SKU Code',dropna=False)[['M','L','XL','XXL','Qty']].sum().reset_index()
+            st.subheader('SKU Wise Pending Size Total')
+            st.dataframe(sku_size_summary,use_container_width=True,hide_index=True)
+            st.caption('Selected SKU(s) pending size-wise total and total pieces — manufacturing check.')
+            df_download(sku_size_summary,'shubhvastra_sku_pending_size_total.csv','Download SKU Size Total CSV')
         if view=='party' and chosen!='All Parties':
             party_row=one("SELECT id,party_name,city,state,gst_number,transport_details,transport_gst_number FROM parties WHERE party_name=:name ORDER BY id LIMIT 1",{"name":chosen})
             if party_row:
@@ -1437,27 +1440,57 @@ def page_cancelled_orders():
     else: st.dataframe(cancelled,use_container_width=True,hide_index=True)
     st.download_button('Download Cancelled PDF',pending_report_pdf_bytes('Cancelled Orders',cancelled),file_name='shubhvastra_cancelled_orders.pdf',mime='application/pdf',key='utilities_cancelled_pdf')
 
+def party_order_summary_pdf(df, totals):
+    buff=io.BytesIO(); doc=SimpleDocTemplate(buff,pagesize=landscape(A4),rightMargin=10*mm,leftMargin=10*mm,topMargin=12*mm,bottomMargin=12*mm)
+    styles=getSampleStyleSheet(); story=[Paragraph("SHUBHVASTRA — PARTY ORDER SUMMARY",styles["Title"]),Spacer(1,4*mm)]
+    data=[["Party Name","City","Phone","Order Qty","Order Amount","Dispatched Qty","Discount Amount","Pending Qty","Pending Amount"]]
+    for _,r in df.iterrows():
+        data.append([str(r.get("Party Name","")),str(r.get("City","")),str(r.get("Phone Number","")),str(int(r.get("Total Qty",0))),f"₹{float(r.get('Total Amount',0)):,.2f}",str(int(r.get("Dispatched Qty",0))),f"₹{float(r.get('Discount Amount',0)):,.2f}",str(int(r.get("Pending Qty",0))),f"₹{float(r.get('Pending Amount',0)):,.2f}"])
+    data.append(["TOTAL","","",str(int(totals.get("Total Qty",0))),f"₹{float(totals.get('Total Amount',0)):,.2f}",str(int(totals.get("Dispatched Qty",0))),f"₹{float(totals.get('Discount Amount',0)):,.2f}",str(int(totals.get("Pending Qty",0))),f"₹{float(totals.get('Pending Amount',0)):,.2f}"])
+    tab=Table(data,repeatRows=1,colWidths=[45*mm,25*mm,27*mm,20*mm,30*mm,25*mm,30*mm,23*mm,30*mm])
+    tab.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),colors.HexColor("#173b5c")),("TEXTCOLOR",(0,0),(-1,0),colors.white),("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("GRID",(0,0),(-1,-1),0.4,colors.grey),("FONTSIZE",(0,0),(-1,-1),7),("ALIGN",(3,1),(-1,-1),"RIGHT"),("BACKGROUND",(0,-1),(-1,-1),colors.HexColor("#eaf3fb")),("FONTNAME",(0,-1),(-1,-1),"Helvetica-Bold")]))
+    story.append(tab); doc.build(story); return buff.getvalue()
+
 def page_reports():
     st.title("Order Reports")
-    tabs=st.tabs(["Pending Order List","Agent Wise Order","SKU Wise State Sale Report"])
+    tabs=st.tabs(["Party Order Summary","Pending Order List","Agent Wise Order","SKU Wise State Sale Report"])
     with tabs[0]:
+        summary=q("""SELECT p.id,p.party_name AS "Party Name",p.city AS City,p.phone_number AS "Phone Number",
+          COALESCE(SUM(s.ordered_qty),0) AS "Total Qty",
+          COALESCE(SUM(s.ordered_qty*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Total Amount",
+          COALESCE(SUM(s.ordered_qty*i.piece_rate*COALESCE(i.discount,0)/100.0),0) AS "Discount Amount",
+          COALESCE(SUM((SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id)),0) AS "Dispatched Qty",
+          COALESCE(SUM((s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0))*i.piece_rate*(1-COALESCE(i.discount,0)/100.0)),0) AS "Pending Amount",
+          COALESCE(SUM(s.ordered_qty-COALESCE((SELECT SUM(d.qty) FROM order_dispatches d WHERE d.order_size_id=s.id),0)-COALESCE((SELECT SUM(c.qty) FROM order_size_cancellations c WHERE c.order_size_id=s.id),0)),0) AS "Pending Qty"
+          FROM parties p JOIN orders o ON o.party_id=p.id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id
+          WHERE o.cancelled=0 GROUP BY p.id,p.party_name,p.city,p.phone_number ORDER BY p.party_name""")
+        if not summary.empty:
+            summary=summary.drop(columns=["id"])
+            st.dataframe(summary,use_container_width=True,hide_index=True)
+            totals={c:float(summary[c].sum()) for c in ["Total Qty","Total Amount","Dispatched Qty","Discount Amount","Pending Qty","Pending Amount"]}
+            metrics=st.columns(6)
+            metrics[0].metric("Total Order Qty",f"{int(totals['Total Qty']):,} Pcs")
+            metrics[1].metric("Total Order Amount",f"₹{totals['Total Amount']:,.2f}")
+            metrics[2].metric("Dispatched Qty",f"{int(totals['Dispatched Qty']):,} Pcs")
+            metrics[3].metric("Discount Amount",f"₹{totals['Discount Amount']:,.2f}")
+            metrics[4].metric("Pending Qty",f"{int(totals['Pending Qty']):,} Pcs")
+            metrics[5].metric("Pending Amount",f"₹{totals['Pending Amount']:,.2f}")
+            st.download_button("Download Party Order Summary PDF",party_order_summary_pdf(summary,totals),file_name="Shubhvastra_Party_Order_Summary.pdf",mime="application/pdf",use_container_width=True)
+            df_download(summary,"shubhvastra_party_order_summary.csv","Export Party Summary CSV")
+        else: st.info("હજુ કોઈ Party ના Order નથી.")
+    with tabs[1]:
         df=q("SELECT o.order_no AS \"Order No\",o.order_date AS \"Order Date\",p.party_name AS \"Party Name\",i.particulars AS \"SKU Code\",s.size_code AS Size,s.ordered_qty AS \"Ordered Qty\",s.cancelled AS Cancelled,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM orders o JOIN parties p ON p.id=o.party_id JOIN order_items i ON i.order_id=o.id JOIN order_item_sizes s ON s.order_item_id=i.id WHERE o.cancelled=0 ORDER BY o.order_no DESC")
         if not df.empty:
-            df["Pending Qty"]=(df["Ordered Qty"]-df["Dispatched"]).clip(lower=0)
-            df=df[df["Pending Qty"]>0].copy()
-            group_cols=["Order No","Order Date","Party Name","SKU Code"]
-            rows=[]
+            df["Pending Qty"]=(df["Ordered Qty"]-df["Dispatched"]).clip(lower=0); df=df[df["Pending Qty"]>0].copy()
+            group_cols=["Order No","Order Date","Party Name","SKU Code"]; rows=[]
             for key,g in df.groupby(group_cols,dropna=False,sort=False):
                 row=dict(zip(group_cols,key))
-                for sz in ("M","L","XL","XXL"):
-                    row[sz]=int(g.loc[g["Size"].astype(str).str.upper()==sz,"Pending Qty"].sum())
-                row["Qty"]=int(g["Pending Qty"].sum())
-                rows.append(row)
+                for sz in ("M","L","XL","XXL"): row[sz]=int(g.loc[g["Size"].astype(str).str.upper()==sz,"Pending Qty"].sum())
+                row["Qty"]=int(g["Pending Qty"].sum()); rows.append(row)
             df=pd.DataFrame(rows,columns=group_cols+["M","L","XL","XXL","Qty"])
-        else:
-            df=pd.DataFrame(columns=["Order No","Order Date","Party Name","SKU Code","M","L","XL","XXL","Qty"])
+        else: df=pd.DataFrame(columns=["Order No","Order Date","Party Name","SKU Code","M","L","XL","XXL","Qty"])
         st.dataframe(df,use_container_width=True,hide_index=True); df_download(df,"shubhvastra_pending_order_list.csv","Export Pending Orders")
-    with tabs[1]:
+    with tabs[2]:
         agents=q("SELECT a.id,a.agent_name AS \"Agent Name\",COUNT(DISTINCT p.id) AS \"Party Count\",COUNT(DISTINCT o.id) AS \"Order Count\" FROM agents a LEFT JOIN parties p ON p.agent_id=a.id LEFT JOIN orders o ON o.party_id=p.id GROUP BY a.id,a.agent_name ORDER BY a.agent_name")
         st.caption("Agent પર click કરવા માટે નીચે Agent પસંદ કરો, પછી તેની Parties અને Party Orders જુઓ.")
         st.dataframe(agents.drop(columns=["id"]) if not agents.empty else agents,use_container_width=True,hide_index=True)
@@ -1474,7 +1507,7 @@ def page_reports():
                     oid=st.selectbox("View Order",odf.id.tolist(),format_func=lambda x:f"Order #{odf.loc[odf.id==x,'Order No'].iloc[0]}")
                     det=q("SELECT i.particulars AS Particulars,i.piece_rate AS \"Piece Rate\",i.discount AS Discount,s.size_code AS Size,s.ordered_qty AS Qty,(SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id) AS Dispatched FROM order_items i JOIN order_item_sizes s ON s.order_item_id=i.id WHERE i.order_id=:id ORDER BY i.sr_no,s.size_code",{"id":int(oid)})
                     st.dataframe(det,use_container_width=True,hide_index=True)
-    with tabs[2]:
+    with tabs[3]:
         df=q("SELECT i.particulars AS SKU,p.state AS State,SUM(s.ordered_qty) AS \"Ordered Qty\",SUM((SELECT COALESCE(SUM(d.qty),0) FROM order_dispatches d WHERE d.order_size_id=s.id)) AS \"Dispatched Qty\" FROM order_items i JOIN orders o ON o.id=i.order_id JOIN parties p ON p.id=o.party_id JOIN order_item_sizes s ON s.order_item_id=i.id GROUP BY i.particulars,p.state ORDER BY i.particulars,p.state")
         st.dataframe(df,use_container_width=True,hide_index=True)
         if is_admin(): df_download(df,"shubhvastra_sku_state_sale_report.csv","Export SKU State Report")
